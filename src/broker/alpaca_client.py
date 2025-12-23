@@ -28,6 +28,22 @@ try:
 except ImportError:
     ALPACA_AVAILABLE = False
     logger.warning("Alpaca SDK not installed. Run: pip install alpaca-trade-api")
+    # Dummy classes for when Alpaca is not installed
+    class TimeInForce:
+        GTC = "gtc"
+        DAY = "day"
+        IOC = "ioc"
+        FOK = "fok"
+    class AlpacaOrderSide:
+        BUY = "buy"
+        SELL = "sell"
+    class TimeFrame:
+        pass
+    class TimeFrameUnit:
+        Minute = "min"
+        Hour = "hour"
+        Day = "day"
+        Week = "week"
 
 from .base import (
     BaseBroker, Order, Position, AccountInfo,
