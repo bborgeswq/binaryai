@@ -1,48 +1,38 @@
 # AI Day Trader - Requirements
+# Compatible with Python 3.10, 3.11, 3.12, 3.13
+
 # Core Trading & Data
 alpaca-trade-api>=3.0.0
 pandas>=2.0.0
 numpy>=1.24.0
 yfinance>=0.2.0
-ccxt>=4.0.0  # Multi-exchange crypto trading
+ccxt>=4.0.0
 
 # Technical Analysis
-ta>=0.10.0  # Technical analysis library
-ta-lib>=0.4.0  # Advanced TA (optional, needs system install)
-pandas-ta>=0.3.0  # Pandas technical analysis
+ta>=0.10.0
 
-# Machine Learning
+# Machine Learning (core)
 scikit-learn>=1.3.0
-xgboost>=2.0.0
-lightgbm>=4.0.0
-torch>=2.0.0  # For deep learning models
 joblib>=1.3.0
 
 # LLM Integration
-anthropic>=0.18.0  # Claude API
-openai>=1.0.0  # GPT API (backup)
+anthropic>=0.18.0
+openai>=1.0.0
 
 # Visualization & Dashboard
 streamlit>=1.30.0
 plotly>=5.18.0
-mplfinance>=0.12.0
-
-# Database & Storage
-sqlalchemy>=2.0.0
-sqlite3  # Built-in
 
 # Utilities
 python-dotenv>=1.0.0
 requests>=2.31.0
 websocket-client>=1.6.0
-schedule>=1.2.0
 loguru>=0.7.0
 pydantic>=2.0.0
-rich>=13.0.0  # Beautiful terminal output
+rich>=13.0.0
 
 # Async Support
 aiohttp>=3.9.0
-asyncio>=3.4.3
 
 # Testing
 pytest>=7.4.0
