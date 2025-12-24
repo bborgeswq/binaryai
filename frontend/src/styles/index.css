@@ -1,0 +1,151 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-canvas: 10 11 13;
+    --color-accent: 20 184 166;
+  }
+
+  * {
+    @apply border-surface-border;
+  }
+
+  body {
+    @apply bg-canvas text-ink font-sans;
+    background-image:
+      radial-gradient(ellipse 80% 50% at 50% -20%, rgba(20, 184, 166, 0.08), transparent),
+      url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%232e3035' fill-opacity='0.15'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-canvas;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-surface-border rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-surface-active;
+  }
+
+  /* Focus states */
+  *:focus-visible {
+    @apply outline-none ring-2 ring-accent ring-offset-2 ring-offset-canvas;
+  }
+
+  /* Selection */
+  ::selection {
+    @apply bg-accent/30 text-ink;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-surface/50 backdrop-blur-sm border border-surface-border rounded-xl;
+  }
+
+  .card-hover {
+    @apply card transition-all duration-200 hover:bg-surface-hover hover:border-surface-active;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200;
+  }
+
+  .btn-primary {
+    @apply btn bg-accent text-canvas hover:bg-accent-hover active:scale-[0.98];
+  }
+
+  .btn-secondary {
+    @apply btn bg-surface hover:bg-surface-hover border border-surface-border;
+  }
+
+  .btn-ghost {
+    @apply btn hover:bg-surface-hover;
+  }
+
+  .btn-danger {
+    @apply btn bg-loss/20 text-loss hover:bg-loss/30 border border-loss/30;
+  }
+
+  .input {
+    @apply w-full px-4 py-2.5 bg-surface border border-surface-border rounded-lg text-ink placeholder:text-ink-tertiary focus:border-accent focus:ring-1 focus:ring-accent transition-colors;
+  }
+
+  .label {
+    @apply block text-xs font-medium text-ink-secondary uppercase tracking-wider mb-2;
+  }
+
+  .stat-value {
+    @apply text-2xl font-semibold font-mono tracking-tight;
+  }
+
+  .stat-label {
+    @apply text-xs text-ink-tertiary uppercase tracking-wider;
+  }
+
+  .badge {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full;
+  }
+
+  .badge-profit {
+    @apply badge bg-profit-muted text-profit;
+  }
+
+  .badge-loss {
+    @apply badge bg-loss-muted text-loss;
+  }
+
+  .badge-warning {
+    @apply badge bg-warning-muted text-warning;
+  }
+
+  .badge-accent {
+    @apply badge bg-accent-muted text-accent;
+  }
+
+  /* Glow effects */
+  .glow-accent {
+    box-shadow: 0 0 40px -10px rgba(20, 184, 166, 0.5);
+  }
+
+  .glow-profit {
+    box-shadow: 0 0 30px -10px rgba(34, 197, 94, 0.4);
+  }
+
+  .glow-loss {
+    box-shadow: 0 0 30px -10px rgba(239, 68, 68, 0.4);
+  }
+
+  /* Glass morphism */
+  .glass {
+    @apply bg-surface/30 backdrop-blur-xl border border-white/5;
+  }
+
+  /* Stagger animation delays */
+  .stagger-1 { animation-delay: 0.1s; }
+  .stagger-2 { animation-delay: 0.2s; }
+  .stagger-3 { animation-delay: 0.3s; }
+  .stagger-4 { animation-delay: 0.4s; }
+  .stagger-5 { animation-delay: 0.5s; }
+}
+
+@layer utilities {
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-accent to-teal-300;
+  }
+
+  .animate-in {
+    animation: slideUp 0.5s ease-out forwards;
+    opacity: 0;
+  }
+}
