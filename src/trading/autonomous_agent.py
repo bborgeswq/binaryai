@@ -334,7 +334,7 @@ class TradingAgent:
             logger.info(f"🟢 Executing BUY: {quantity} {symbol} @ ${price:,.2f}")
 
             # Place market order
-            order = await self.broker.place_order(
+            order = await self.broker.submit_order(
                 symbol=symbol,
                 side=OrderSide.BUY,
                 quantity=quantity,
@@ -383,7 +383,7 @@ class TradingAgent:
             logger.info(f"🔴 Executing SELL: {quantity} {symbol} @ ${price:,.2f}")
 
             # Place market sell order
-            order = await self.broker.place_order(
+            order = await self.broker.submit_order(
                 symbol=symbol,
                 side=OrderSide.SELL,
                 quantity=quantity,

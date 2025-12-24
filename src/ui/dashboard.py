@@ -1,6 +1,6 @@
 """
-AI Day Trader Dashboard - Enhanced Version with Visual AI Activity
-Real-time trading dashboard showing AI decisions, markers, and reasoning
+AI Day Trader Dashboard - Professional Edition
+Clean, minimalist trading interface
 """
 import streamlit as st
 import pandas as pd
@@ -44,6 +44,22 @@ BINANCE_TESTNET = os.getenv('BINANCE_TESTNET', 'true').lower() == 'true'
 ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY', '')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
 
+# Color Palette - Professional & Minimal
+COLORS = {
+    'bg_primary': '#0f1419',
+    'bg_secondary': '#1a1f26',
+    'bg_card': '#1e252e',
+    'border': '#2d3640',
+    'text_primary': '#e7e9ea',
+    'text_secondary': '#8b98a5',
+    'text_muted': '#5c6b7a',
+    'accent': '#3b82f6',
+    'success': '#22c55e',
+    'danger': '#ef4444',
+    'warning': '#f59e0b',
+    'neutral': '#6b7280',
+}
+
 
 def get_broker():
     """Get or create Binance broker instance."""
@@ -85,7 +101,7 @@ def get_llm_analyzer():
                     api_key=ANTHROPIC_API_KEY,
                     provider="anthropic"
                 )
-            except Exception as e:
+            except Exception:
                 st.session_state.llm_analyzer = None
         elif LLM_AVAILABLE and OPENAI_API_KEY:
             try:
@@ -93,7 +109,7 @@ def get_llm_analyzer():
                     api_key=OPENAI_API_KEY,
                     provider="openai"
                 )
-            except Exception as e:
+            except Exception:
                 st.session_state.llm_analyzer = None
         else:
             st.session_state.llm_analyzer = None
@@ -122,7 +138,7 @@ def fetch_live_data(symbol: str, timeframe: str = "1h", limit: int = 100):
             df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
             df.set_index('timestamp', inplace=True)
             return df
-    except:
+    except Exception:
         pass
     return None
 
@@ -134,130 +150,232 @@ def fetch_ticker(symbol: str):
         return None
     try:
         return run_async(broker.get_ticker(symbol))
-    except:
+    except Exception:
         return None
 
 
 def run_dashboard():
     """Main dashboard entry point."""
     st.set_page_config(
-        page_title="AI Day Trader",
-        page_icon="🤖",
+        page_title="AI Trader",
+        page_icon="◈",
         layout="wide",
         initial_sidebar_state="expanded"
     )
 
-    # Enhanced CSS
-    st.markdown("""
+    # Professional CSS
+    st.markdown(f"""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Rajdhani:wght@400;500;700&family=JetBrains+Mono&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
-    .main-header {
-        font-family: 'Orbitron', monospace;
-        font-size: 2.5rem;
-        background: linear-gradient(90deg, #00ff88, #00d4ff);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        text-align: center;
-        padding: 10px;
-    }
+    * {{
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }}
 
-    .signal-buy {
-        background: linear-gradient(135deg, #0d4d0d, #1a472a);
-        border: 2px solid #00ff00;
-        border-radius: 15px;
-        padding: 25px;
-        text-align: center;
-        animation: pulse-green 2s infinite;
-    }
-    .signal-sell {
-        background: linear-gradient(135deg, #4d0d0d, #472a1a);
-        border: 2px solid #ff0000;
-        border-radius: 15px;
-        padding: 25px;
-        text-align: center;
-        animation: pulse-red 2s infinite;
-    }
-    .signal-hold {
-        background: linear-gradient(135deg, #4d4d0d, #47471a);
-        border: 2px solid #ffff00;
-        border-radius: 15px;
-        padding: 25px;
-        text-align: center;
-    }
+    .main-header {{
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: {COLORS['text_primary']};
+        padding: 0;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }}
 
-    @keyframes pulse-green {
-        0%, 100% { box-shadow: 0 0 20px rgba(0,255,0,0.3); }
-        50% { box-shadow: 0 0 40px rgba(0,255,0,0.6); }
-    }
-    @keyframes pulse-red {
-        0%, 100% { box-shadow: 0 0 20px rgba(255,0,0,0.3); }
-        50% { box-shadow: 0 0 40px rgba(255,0,0,0.6); }
-    }
+    .status-badge {{
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 12px;
+        border-radius: 6px;
+        font-size: 0.75rem;
+        font-weight: 500;
+    }}
+    .status-connected {{
+        background: rgba(34, 197, 94, 0.1);
+        color: {COLORS['success']};
+        border: 1px solid rgba(34, 197, 94, 0.2);
+    }}
+    .status-disconnected {{
+        background: rgba(239, 68, 68, 0.1);
+        color: {COLORS['danger']};
+        border: 1px solid rgba(239, 68, 68, 0.2);
+    }}
 
-    .ai-console {
-        background: #0a0a0f;
-        border: 1px solid #00ff88;
-        border-radius: 10px;
-        padding: 15px;
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 0.85rem;
-        max-height: 400px;
-        overflow-y: auto;
-    }
-    .ai-line { margin: 5px 0; }
-    .ai-time { color: #666; }
-    .ai-type-analyzing { color: #00d4ff; }
-    .ai-type-signal { color: #00ff88; }
-    .ai-type-trade { color: #ff9500; }
-    .ai-type-error { color: #ff4444; }
-    .ai-type-thinking { color: #9966ff; }
-
-    .ai-thinking-box {
-        background: linear-gradient(90deg, #1a1a2e, #16213e, #1a1a2e);
-        background-size: 200% 100%;
-        animation: thinking 3s ease infinite;
-        border-radius: 10px;
-        padding: 20px;
-        border-left: 4px solid #00ff88;
-    }
-    @keyframes thinking {
-        0% { background-position: 0% 50%; }
-        50% { background-position: 100% 50%; }
-        100% { background-position: 0% 50%; }
-    }
-
-    .activity-card {
-        background: linear-gradient(135deg, #1a1a2e, #16213e);
-        border-radius: 10px;
-        padding: 12px;
-        margin: 8px 0;
-        border-left: 4px solid #00d4ff;
-    }
-    .activity-important {
-        border-left-color: #00ff88;
-        background: linear-gradient(135deg, #0d2d0d, #1a3d2a);
-    }
-
-    .marker-info {
-        background: rgba(0,0,0,0.8);
-        border: 1px solid #00ff88;
+    .card {{
+        background: {COLORS['bg_card']};
+        border: 1px solid {COLORS['border']};
         border-radius: 8px;
-        padding: 10px;
-        font-size: 0.8rem;
-    }
+        padding: 16px;
+        margin: 8px 0;
+    }}
 
-    .stMetric > div {
-        background: linear-gradient(135deg, #1a1a2e, #16213e);
-        border-radius: 10px;
-        padding: 15px;
-        border: 1px solid #0f3460;
-    }
+    .signal-card {{
+        background: {COLORS['bg_card']};
+        border: 1px solid {COLORS['border']};
+        border-radius: 12px;
+        padding: 24px;
+        text-align: center;
+    }}
+    .signal-buy {{
+        border-left: 4px solid {COLORS['success']};
+    }}
+    .signal-sell {{
+        border-left: 4px solid {COLORS['danger']};
+    }}
+    .signal-hold {{
+        border-left: 4px solid {COLORS['warning']};
+    }}
+
+    .signal-label {{
+        font-size: 2rem;
+        font-weight: 700;
+        margin: 0;
+    }}
+    .signal-buy .signal-label {{ color: {COLORS['success']}; }}
+    .signal-sell .signal-label {{ color: {COLORS['danger']}; }}
+    .signal-hold .signal-label {{ color: {COLORS['warning']}; }}
+
+    .metric-card {{
+        background: {COLORS['bg_secondary']};
+        border: 1px solid {COLORS['border']};
+        border-radius: 8px;
+        padding: 12px 16px;
+    }}
+    .metric-label {{
+        font-size: 0.75rem;
+        color: {COLORS['text_muted']};
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 4px;
+    }}
+    .metric-value {{
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: {COLORS['text_primary']};
+    }}
+    .metric-delta-positive {{ color: {COLORS['success']}; font-size: 0.85rem; }}
+    .metric-delta-negative {{ color: {COLORS['danger']}; font-size: 0.85rem; }}
+
+    .console {{
+        background: {COLORS['bg_primary']};
+        border: 1px solid {COLORS['border']};
+        border-radius: 8px;
+        padding: 16px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.8rem;
+        max-height: 350px;
+        overflow-y: auto;
+    }}
+    .console-line {{
+        padding: 4px 0;
+        border-bottom: 1px solid {COLORS['border']};
+    }}
+    .console-time {{
+        color: {COLORS['text_muted']};
+        margin-right: 8px;
+    }}
+    .console-type-analyzing {{ color: {COLORS['accent']}; }}
+    .console-type-signal {{ color: {COLORS['success']}; }}
+    .console-type-trade {{ color: {COLORS['warning']}; }}
+    .console-type-error {{ color: {COLORS['danger']}; }}
+    .console-type-thinking {{ color: #a78bfa; }}
+
+    .news-item {{
+        background: {COLORS['bg_secondary']};
+        border: 1px solid {COLORS['border']};
+        border-radius: 8px;
+        padding: 12px 16px;
+        margin: 8px 0;
+    }}
+    .news-positive {{ border-left: 3px solid {COLORS['success']}; }}
+    .news-negative {{ border-left: 3px solid {COLORS['danger']}; }}
+    .news-neutral {{ border-left: 3px solid {COLORS['neutral']}; }}
+
+    .section-header {{
+        font-size: 1rem;
+        font-weight: 600;
+        color: {COLORS['text_primary']};
+        margin: 16px 0 12px 0;
+        padding-bottom: 8px;
+        border-bottom: 1px solid {COLORS['border']};
+    }}
+
+    .sidebar-section {{
+        margin-bottom: 24px;
+    }}
+    .sidebar-title {{
+        font-size: 0.7rem;
+        font-weight: 600;
+        color: {COLORS['text_muted']};
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 12px;
+    }}
+
+    .insight-card {{
+        background: {COLORS['bg_secondary']};
+        border: 1px solid {COLORS['border']};
+        border-left: 3px solid {COLORS['accent']};
+        border-radius: 6px;
+        padding: 10px 12px;
+        margin: 6px 0;
+        font-size: 0.85rem;
+        color: {COLORS['text_secondary']};
+    }}
+
+    .stMetric > div {{
+        background: {COLORS['bg_secondary']};
+        border: 1px solid {COLORS['border']};
+        border-radius: 8px;
+        padding: 12px;
+    }}
+
+    .stTabs [data-baseweb="tab-list"] {{
+        gap: 8px;
+        background: transparent;
+    }}
+    .stTabs [data-baseweb="tab"] {{
+        background: {COLORS['bg_secondary']};
+        border: 1px solid {COLORS['border']};
+        border-radius: 6px;
+        padding: 8px 16px;
+        color: {COLORS['text_secondary']};
+    }}
+    .stTabs [aria-selected="true"] {{
+        background: {COLORS['accent']};
+        border-color: {COLORS['accent']};
+        color: white;
+    }}
+
+    .stButton > button {{
+        background: {COLORS['bg_secondary']};
+        border: 1px solid {COLORS['border']};
+        color: {COLORS['text_primary']};
+        font-weight: 500;
+        border-radius: 6px;
+        transition: all 0.2s;
+    }}
+    .stButton > button:hover {{
+        background: {COLORS['bg_card']};
+        border-color: {COLORS['accent']};
+    }}
+    .stButton > button[kind="primary"] {{
+        background: {COLORS['accent']};
+        border-color: {COLORS['accent']};
+    }}
+
+    div[data-testid="stExpander"] {{
+        background: {COLORS['bg_secondary']};
+        border: 1px solid {COLORS['border']};
+        border-radius: 8px;
+    }}
     </style>
     """, unsafe_allow_html=True)
 
     # Header
-    st.markdown('<h1 class="main-header">🤖 AI DAY TRADER</h1>', unsafe_allow_html=True)
+    st.markdown('<div class="main-header">AI Trader</div>', unsafe_allow_html=True)
 
     # Initialize
     broker = get_broker()
@@ -274,53 +392,58 @@ def run_dashboard():
 
 def render_sidebar(tracker: AIActivityTracker):
     """Render sidebar controls."""
-    st.markdown("### ⚡ CONTROL CENTER")
 
-    # Connection status
+    # Connection Status
+    st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
+    st.markdown('<div class="sidebar-title">Connection</div>', unsafe_allow_html=True)
+
     if st.session_state.get('broker_connected'):
-        st.success("🟢 BINANCE CONNECTED")
-        if BINANCE_TESTNET:
-            st.info("📋 TESTNET MODE")
+        status_class = "status-connected"
+        status_text = "Connected" + (" (Testnet)" if BINANCE_TESTNET else "")
+        st.markdown(f'<div class="status-badge {status_class}">● {status_text}</div>', unsafe_allow_html=True)
     else:
-        st.error("🔴 DISCONNECTED")
-        if st.button("🔄 Reconnect"):
+        st.markdown('<div class="status-badge status-disconnected">● Disconnected</div>', unsafe_allow_html=True)
+        if st.button("Reconnect", key="reconnect"):
             if 'broker' in st.session_state:
                 del st.session_state['broker']
             get_broker()
             st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    # LLM Status
-    st.divider()
-    st.markdown("### 🧠 AI ENGINE")
+    # AI Status
+    st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
+    st.markdown('<div class="sidebar-title">AI Engine</div>', unsafe_allow_html=True)
     if ANTHROPIC_API_KEY:
-        st.success("🟢 Claude API Ready")
+        st.markdown('<div class="status-badge status-connected">● Claude Active</div>', unsafe_allow_html=True)
     elif OPENAI_API_KEY:
-        st.success("🟢 OpenAI API Ready")
+        st.markdown('<div class="status-badge status-connected">● GPT Active</div>', unsafe_allow_html=True)
     else:
-        st.warning("🟡 No LLM (using indicators only)")
+        st.markdown(f'<div class="status-badge" style="background:rgba(245,158,11,0.1);color:{COLORS["warning"]};border:1px solid rgba(245,158,11,0.2);">○ Indicators Only</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
     st.divider()
 
     # Agent Controls
-    st.markdown("### 🎮 AGENT CONTROLS")
+    st.markdown('<div class="sidebar-title">Agent Control</div>', unsafe_allow_html=True)
     agent_running = st.session_state.get('agent_running', False)
 
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("▶️ START" if not agent_running else "🟢 RUNNING",
-                    use_container_width=True,
-                    type="primary" if not agent_running else "secondary"):
+        start_label = "Running" if agent_running else "Start"
+        if st.button(start_label, use_container_width=True, type="primary" if not agent_running else "secondary", key="start"):
             st.session_state.agent_running = True
-            tracker.log_activity(ActivityType.THINKING, "SYSTEM", "Agent Started", "AI trading agent is now active")
+            tracker.log_activity(ActivityType.THINKING, "SYSTEM", "Agent Started", "Trading agent activated")
+            st.rerun()
     with col2:
-        if st.button("⏹️ STOP", use_container_width=True):
+        if st.button("Stop", use_container_width=True, key="stop"):
             st.session_state.agent_running = False
-            tracker.log_activity(ActivityType.THINKING, "SYSTEM", "Agent Stopped", "AI trading agent stopped")
+            tracker.log_activity(ActivityType.THINKING, "SYSTEM", "Agent Stopped", "Trading agent deactivated")
+            st.rerun()
 
     st.divider()
 
     # Settings
-    st.markdown("### 📊 SETTINGS")
+    st.markdown('<div class="sidebar-title">Settings</div>', unsafe_allow_html=True)
     symbols = st.multiselect(
         "Trading Pairs",
         ["BTC/USDT", "ETH/USDT", "SOL/USDT", "XRP/USDT", "BNB/USDT", "ADA/USDT"],
@@ -334,9 +457,9 @@ def render_sidebar(tracker: AIActivityTracker):
 
     st.divider()
 
-    # Risk
-    st.markdown("### 🛡️ RISK")
-    st.slider("Risk per Trade", 1.0, 5.0, 2.0, 0.5, format="%.1f%%", key="risk")
+    # Risk Settings
+    st.markdown('<div class="sidebar-title">Risk Management</div>', unsafe_allow_html=True)
+    st.slider("Risk per Trade (%)", 1.0, 5.0, 2.0, 0.5, key="risk")
     st.slider("Max Positions", 1, 10, 3, key="max_pos")
 
 
@@ -348,16 +471,9 @@ def render_main_content(db: TradingDatabase, tracker: AIActivityTracker):
     # Top metrics
     render_top_metrics(db)
 
-    st.divider()
-
     # Main tabs
     tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-        "📊 LIVE CHARTS",
-        "🤖 AI ACTIVITY",
-        "🧠 AI ANALYSIS",
-        "📰 NEWS",
-        "📜 HISTORY",
-        "🎓 LEARNING"
+        "Charts", "AI Activity", "Analysis", "News", "History", "Learning"
     ])
 
     with tab1:
@@ -382,8 +498,8 @@ def render_main_content(db: TradingDatabase, tracker: AIActivityTracker):
     st.divider()
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        st.caption(f"⏰ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        if st.button("🔄 REFRESH", use_container_width=True):
+        st.caption(f"Last updated: {datetime.now().strftime('%H:%M:%S')}")
+        if st.button("Refresh", use_container_width=True, key="refresh"):
             st.rerun()
 
 
@@ -398,28 +514,31 @@ def render_top_metrics(db: TradingDatabase):
         if broker:
             try:
                 account = run_async(broker.get_account())
-                st.metric("💰 Portfolio", f"${float(account.equity):,.2f}")
-            except:
-                st.metric("💰 Portfolio", "---")
+                equity = float(account.equity)
+                st.metric("Portfolio", f"${equity:,.2f}")
+            except Exception:
+                st.metric("Portfolio", "---")
         else:
-            st.metric("💰 Portfolio", "---")
+            st.metric("Portfolio", "---")
 
     with col2:
-        st.metric("📈 Trades", stats.get('total_trades', 0))
+        st.metric("Total Trades", stats.get('total_trades', 0))
 
     with col3:
-        st.metric("🎯 Win Rate", f"{stats.get('win_rate', 0):.1f}%")
+        win_rate = stats.get('win_rate', 0)
+        st.metric("Win Rate", f"{win_rate:.1f}%")
 
     with col4:
         pnl = stats.get('total_pnl', 0)
-        st.metric("💎 P&L", f"${pnl:,.2f}", delta=f"{pnl:+,.2f}")
+        delta_str = f"{pnl:+,.2f}" if pnl != 0 else None
+        st.metric("Total P&L", f"${pnl:,.2f}", delta=delta_str)
 
     with col5:
-        st.metric("📊 Avg Win", f"${stats.get('avg_win', 0):,.2f}")
+        st.metric("Avg Win", f"${stats.get('avg_win', 0):,.2f}")
 
     with col6:
-        status = "🟢 ACTIVE" if st.session_state.get('agent_running') else "🔴 STOPPED"
-        st.metric("🤖 Status", status)
+        status = "Active" if st.session_state.get('agent_running') else "Stopped"
+        st.metric("Agent", status)
 
 
 def render_charts_with_markers(symbols: list, timeframe: str, tracker: AIActivityTracker):
@@ -431,22 +550,24 @@ def render_charts_with_markers(symbols: list, timeframe: str, tracker: AIActivit
 
     if df is None or df.empty:
         df = generate_sample_ohlcv(100)
-        st.warning("⚠️ Using sample data")
+        st.info("Using sample data - check connection")
 
     # Get markers for this symbol
     markers = tracker.get_markers_for_symbol(selected)
 
-    # Price metrics
+    # Price metrics row
     if ticker:
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            st.metric("💲 Price", f"${ticker.get('last', 0):,.2f}", f"{ticker.get('percentage', 0):+.2f}%")
+            change = ticker.get('percentage', 0)
+            st.metric("Price", f"${ticker.get('last', 0):,.2f}", f"{change:+.2f}%")
         with col2:
-            st.metric("📈 High", f"${ticker.get('high', 0):,.2f}")
+            st.metric("24h High", f"${ticker.get('high', 0):,.2f}")
         with col3:
-            st.metric("📉 Low", f"${ticker.get('low', 0):,.2f}")
+            st.metric("24h Low", f"${ticker.get('low', 0):,.2f}")
         with col4:
-            st.metric("📊 Volume", f"${ticker.get('quoteVolume', 0):,.0f}")
+            vol = ticker.get('quoteVolume', 0)
+            st.metric("Volume", f"${vol:,.0f}")
 
     # Create chart
     fig = make_subplots(
@@ -457,195 +578,161 @@ def render_charts_with_markers(symbols: list, timeframe: str, tracker: AIActivit
         subplot_titles=("", "RSI", "MACD")
     )
 
-    # Candlesticks
+    # Candlesticks - Using professional colors
     fig.add_trace(go.Candlestick(
         x=df.index, open=df["open"], high=df["high"],
         low=df["low"], close=df["close"], name="Price",
-        increasing_line_color='#00ff88', decreasing_line_color='#ff4444'
+        increasing_line_color=COLORS['success'],
+        decreasing_line_color=COLORS['danger'],
+        increasing_fillcolor=COLORS['success'],
+        decreasing_fillcolor=COLORS['danger']
     ), row=1, col=1)
 
     # EMAs
     ema9 = df["close"].ewm(span=9).mean()
     ema21 = df["close"].ewm(span=21).mean()
     fig.add_trace(go.Scatter(x=df.index, y=ema9, name="EMA 9",
-                             line=dict(color="#00d4ff", width=1)), row=1, col=1)
+                             line=dict(color=COLORS['accent'], width=1)), row=1, col=1)
     fig.add_trace(go.Scatter(x=df.index, y=ema21, name="EMA 21",
-                             line=dict(color="#ff9500", width=1)), row=1, col=1)
+                             line=dict(color=COLORS['warning'], width=1)), row=1, col=1)
 
     # Bollinger Bands
     sma20 = df["close"].rolling(20).mean()
     std20 = df["close"].rolling(20).std()
     fig.add_trace(go.Scatter(x=df.index, y=sma20 + 2*std20, name="BB Upper",
-                             line=dict(color="gray", dash="dash")), row=1, col=1)
+                             line=dict(color=COLORS['text_muted'], dash="dash", width=1)), row=1, col=1)
     fig.add_trace(go.Scatter(x=df.index, y=sma20 - 2*std20, name="BB Lower",
-                             line=dict(color="gray", dash="dash"),
-                             fill='tonexty', fillcolor='rgba(128,128,128,0.1)'), row=1, col=1)
+                             line=dict(color=COLORS['text_muted'], dash="dash", width=1),
+                             fill='tonexty', fillcolor='rgba(107,114,128,0.1)'), row=1, col=1)
 
-    # ADD AI MARKERS TO CHART
+    # AI Markers
     if markers:
         for marker in markers:
-            symbol_map = {
-                "triangle-up": "triangle-up",
-                "triangle-down": "triangle-down",
-                "star": "star",
-                "diamond": "diamond",
-                "circle": "circle"
-            }
+            # Use more professional marker colors
+            marker_color = COLORS['success'] if 'BUY' in marker.label else COLORS['danger'] if 'SELL' in marker.label else COLORS['accent']
             fig.add_trace(go.Scatter(
                 x=[marker.timestamp],
                 y=[marker.price],
-                mode='markers+text',
+                mode='markers',
                 name=marker.label,
                 marker=dict(
-                    size=marker.size,
-                    color=marker.color,
-                    symbol=symbol_map.get(marker.symbol, "circle"),
-                    line=dict(width=2, color='white')
+                    size=10,
+                    color=marker_color,
+                    symbol="circle",
+                    line=dict(width=1, color='white')
                 ),
-                text=[marker.label],
-                textposition="top center",
-                textfont=dict(size=10, color=marker.color),
-                hovertext=marker.details,
+                hovertext=f"{marker.label}: {marker.details}",
                 hoverinfo='text'
             ), row=1, col=1)
 
     # RSI
     rsi = calculate_rsi(df["close"])
     fig.add_trace(go.Scatter(x=df.index, y=rsi, name="RSI",
-                             line=dict(color="#9966ff")), row=2, col=1)
-    fig.add_hline(y=70, line_dash="dash", line_color="#ff4444", row=2, col=1)
-    fig.add_hline(y=30, line_dash="dash", line_color="#00ff88", row=2, col=1)
+                             line=dict(color="#a78bfa", width=1)), row=2, col=1)
+    fig.add_hline(y=70, line_dash="dash", line_color=COLORS['danger'], line_width=1, row=2, col=1)
+    fig.add_hline(y=30, line_dash="dash", line_color=COLORS['success'], line_width=1, row=2, col=1)
 
     # MACD
     macd, signal, hist = calculate_macd(df["close"])
     fig.add_trace(go.Scatter(x=df.index, y=macd, name="MACD",
-                             line=dict(color="#00d4ff")), row=3, col=1)
+                             line=dict(color=COLORS['accent'], width=1)), row=3, col=1)
     fig.add_trace(go.Scatter(x=df.index, y=signal, name="Signal",
-                             line=dict(color="#ff9500")), row=3, col=1)
-    colors = ["#00ff88" if h >= 0 else "#ff4444" for h in hist.fillna(0)]
-    fig.add_trace(go.Bar(x=df.index, y=hist, name="Hist", marker_color=colors), row=3, col=1)
+                             line=dict(color=COLORS['warning'], width=1)), row=3, col=1)
+    colors = [COLORS['success'] if h >= 0 else COLORS['danger'] for h in hist.fillna(0)]
+    fig.add_trace(go.Bar(x=df.index, y=hist, name="Histogram", marker_color=colors, opacity=0.6), row=3, col=1)
 
     fig.update_layout(
-        height=700,
+        height=600,
         template="plotly_dark",
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(26,26,46,0.8)',
+        paper_bgcolor=COLORS['bg_primary'],
+        plot_bgcolor=COLORS['bg_secondary'],
         showlegend=True,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02),
-        xaxis_rangeslider_visible=False
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, font=dict(size=10)),
+        xaxis_rangeslider_visible=False,
+        margin=dict(l=0, r=0, t=30, b=0),
+        font=dict(family="Inter", color=COLORS['text_secondary'])
     )
+
+    fig.update_xaxes(gridcolor=COLORS['border'], zerolinecolor=COLORS['border'])
+    fig.update_yaxes(gridcolor=COLORS['border'], zerolinecolor=COLORS['border'])
 
     st.plotly_chart(fig, use_container_width=True)
 
-    # Show marker legend
+    # Marker legend
     if markers:
-        st.markdown("### 🎯 AI Markers on Chart")
-        cols = st.columns(min(len(markers[-5:]), 5))
-        for i, marker in enumerate(markers[-5:]):
-            with cols[i % 5]:
-                st.markdown(f"""
-                <div class="marker-info">
-                    <span style="color:{marker.color}">●</span> <b>{marker.label}</b><br>
-                    <small>{marker.details[:50]}...</small>
-                </div>
-                """, unsafe_allow_html=True)
+        st.markdown('<div class="section-header">Recent Signals</div>', unsafe_allow_html=True)
+        cols = st.columns(min(len(markers[-4:]), 4))
+        for i, marker in enumerate(markers[-4:]):
+            with cols[i]:
+                st.caption(f"{marker.label} @ ${marker.price:,.2f}")
 
 
 def render_ai_activity_panel(tracker: AIActivityTracker):
     """Render AI activity monitoring panel."""
-    st.markdown("### 🤖 AI Activity Monitor")
+    st.markdown('<div class="section-header">Activity Monitor</div>', unsafe_allow_html=True)
 
     col1, col2 = st.columns([2, 1])
 
     with col1:
-        # AI Console (live activity log)
-        st.markdown("#### 📺 Live Console")
+        st.markdown("**Console**")
+        activities = tracker.get_recent_activities(20)
 
-        activities = tracker.get_recent_activities(30)
-
-        console_html = '<div class="ai-console">'
-        for activity in activities:
-            type_class = f"ai-type-{activity.activity_type.value}"
-            emoji = {
-                'analyzing': '🔍',
-                'signal_generated': '📊',
-                'trade_placed': '💰',
-                'trade_closed': '✅',
-                'pattern_detected': '📈',
-                'thinking': '🧠',
-                'error': '❌'
-            }.get(activity.activity_type.value, '•')
-
-            console_html += f'''
-            <div class="ai-line">
-                <span class="ai-time">[{activity.timestamp.strftime("%H:%M:%S")}]</span>
-                <span class="{type_class}">{emoji} {activity.title}</span>
-                <span style="color:#888"> - {activity.description[:60]}...</span>
-            </div>
-            '''
+        console_html = '<div class="console">'
+        if not activities:
+            console_html += f'<div style="color:{COLORS["text_muted"]}">No activity yet. Start the agent or simulate activity.</div>'
+        else:
+            for activity in activities:
+                type_class = f"console-type-{activity.activity_type.value}"
+                console_html += f'''
+                <div class="console-line">
+                    <span class="console-time">{activity.timestamp.strftime("%H:%M:%S")}</span>
+                    <span class="{type_class}">[{activity.activity_type.value.upper()}]</span>
+                    <span style="color:{COLORS['text_secondary']}">{activity.title}</span>
+                </div>
+                '''
         console_html += '</div>'
-
         st.markdown(console_html, unsafe_allow_html=True)
 
-        # Simulate activity button (for demo)
-        if st.button("🔄 Simulate AI Activity"):
+        if st.button("Simulate Activity", key="simulate"):
             import random
             symbol = random.choice(["BTC/USDT", "ETH/USDT"])
             price = 95000 + random.randint(-1000, 1000) if "BTC" in symbol else 3500 + random.randint(-100, 100)
 
-            # Simulate analysis
-            tracker.log_analyzing(symbol, {"rsi": random.uniform(30, 70), "macd": random.uniform(-100, 100)})
-            tracker.log_thinking(symbol, f"Evaluating market conditions for {symbol}...")
+            tracker.log_analyzing(symbol, {"rsi": random.uniform(30, 70)})
+            tracker.log_thinking(symbol, f"Analyzing {symbol} market conditions")
 
-            # Simulate signal
             signal = random.choice(["BUY", "SELL", "HOLD"])
-            confidence = random.uniform(0.5, 0.9)
-            tracker.log_signal(
-                symbol, signal, confidence, price,
-                f"RSI indicates {'oversold' if signal == 'BUY' else 'overbought' if signal == 'SELL' else 'neutral'} conditions",
-                {"rsi": 35, "macd": 50}
-            )
-
+            tracker.log_signal(symbol, signal, random.uniform(0.6, 0.9), price,
+                             "Technical indicators analysis", {"rsi": random.uniform(30, 70)})
             st.rerun()
 
     with col2:
-        # Current AI State
-        st.markdown("#### 🧠 AI Brain State")
-
+        st.markdown("**Agent State**")
         state = tracker.get_current_state()
 
-        status_color = "#00ff88" if state['status'] == 'analyzing' else "#666"
+        status = state['status'].upper()
+        status_color = COLORS['success'] if state['status'] == 'analyzing' else COLORS['text_muted']
+
         st.markdown(f"""
-        <div class="ai-thinking-box">
-            <p style="color:{status_color}; margin:0;">
-                <b>Status:</b> {state['status'].upper()}
-            </p>
-            <p style="color:#aaa; margin:10px 0 0 0; font-size:0.9rem;">
-                {state['thinking'] or 'Waiting for market data...'}
-            </p>
+        <div class="card">
+            <div class="metric-label">Status</div>
+            <div style="color:{status_color}; font-weight:600;">{status}</div>
+            <div style="color:{COLORS['text_muted']}; font-size:0.85rem; margin-top:8px;">
+                {state['thinking'] or 'Idle'}
+            </div>
         </div>
         """, unsafe_allow_html=True)
 
-        # Last Signal
         if state.get('last_signal'):
             sig = state['last_signal']
-            sig_color = "#00ff88" if sig['signal'] == 'BUY' else "#ff4444" if sig['signal'] == 'SELL' else "#ffff00"
+            sig_color = COLORS['success'] if sig['signal'] == 'BUY' else COLORS['danger'] if sig['signal'] == 'SELL' else COLORS['warning']
             st.markdown(f"""
-            <div style="margin-top:20px; padding:15px; background:linear-gradient(135deg,#1a1a2e,#16213e); border-radius:10px;">
-                <p style="color:#888; margin:0;">Last Signal:</p>
-                <h2 style="color:{sig_color}; margin:5px 0;">{sig['signal']}</h2>
-                <p style="color:#aaa; margin:0;">{sig['symbol']} | {sig['confidence']:.0%}</p>
-            </div>
-            """, unsafe_allow_html=True)
-
-        # Important Activities
-        st.markdown("#### ⚠️ Important Events")
-        important = tracker.get_important_activities(5)
-        for act in important:
-            st.markdown(f"""
-            <div class="activity-card activity-important">
-                <b>{act.title}</b><br>
-                <small style="color:#888">{act.timestamp.strftime("%H:%M")} | {act.symbol}</small>
+            <div class="card" style="margin-top:12px;">
+                <div class="metric-label">Last Signal</div>
+                <div style="color:{sig_color}; font-size:1.5rem; font-weight:700;">{sig['signal']}</div>
+                <div style="color:{COLORS['text_muted']}; font-size:0.85rem;">
+                    {sig['symbol']} · {sig['confidence']:.0%} confidence
+                </div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -677,20 +764,22 @@ def render_ai_analysis(symbols: list, db: TradingDatabase, tracker: AIActivityTr
     elif rsi > 70:
         bearish += 1
         reasons.append(f"RSI overbought ({rsi:.1f})")
+    else:
+        reasons.append(f"RSI neutral ({rsi:.1f})")
 
     if macd.iloc[-1] > signal_line.iloc[-1]:
         bullish += 1
-        reasons.append("MACD bullish")
+        reasons.append("MACD bullish crossover")
     else:
         bearish += 1
-        reasons.append("MACD bearish")
+        reasons.append("MACD bearish crossover")
 
     if ema9 > ema21:
         bullish += 1
-        reasons.append("EMA golden cross")
+        reasons.append("EMA trend: bullish")
     else:
         bearish += 1
-        reasons.append("EMA death cross")
+        reasons.append("EMA trend: bearish")
 
     if bullish > bearish:
         signal = "BUY"
@@ -708,54 +797,47 @@ def render_ai_analysis(symbols: list, db: TradingDatabase, tracker: AIActivityTr
     col1, col2 = st.columns(2)
 
     with col1:
+        st.markdown('<div class="section-header">Signal</div>', unsafe_allow_html=True)
         price_str = f"${ticker.get('last', current_price):,.2f}" if ticker else f"${current_price:,.2f}"
-        sig_color = "#00ff88" if signal == "BUY" else "#ff4444" if signal == "SELL" else "#ffff00"
 
         st.markdown(f"""
-        <div class="{signal_class}">
-            <h1 style="color:{sig_color}; font-size:3rem; margin:0; font-family:'Orbitron';">
-                {'📈' if signal == 'BUY' else '📉' if signal == 'SELL' else '⏸️'} {signal}
-            </h1>
-            <p style="color:white; font-size:1.5rem; margin:10px 0;">Confidence: <b>{confidence:.0%}</b></p>
-            <p style="color:#aaa;">{selected} @ {price_str}</p>
+        <div class="signal-card {signal_class}">
+            <div class="signal-label">{signal}</div>
+            <div style="color:{COLORS['text_secondary']}; margin-top:8px;">
+                Confidence: {confidence:.0%}
+            </div>
+            <div style="color:{COLORS['text_muted']}; font-size:0.85rem; margin-top:4px;">
+                {selected} @ {price_str}
+            </div>
         </div>
         """, unsafe_allow_html=True)
 
-        # Reasons
-        st.markdown("### 📋 Signal Reasoning")
+        st.markdown('<div class="section-header">Reasoning</div>', unsafe_allow_html=True)
         for reason in reasons:
-            st.markdown(f"• {reason}")
+            st.markdown(f"- {reason}")
 
-        # Add signal to tracker button
-        if st.button("📊 Log This Signal"):
+        if st.button("Log Signal", key="log_signal"):
             tracker.log_signal(selected, signal, confidence, current_price,
                              " | ".join(reasons), {"rsi": rsi, "macd": macd.iloc[-1]})
-            st.success("Signal logged and marker added to chart!")
+            st.success("Signal logged")
             st.rerun()
 
     with col2:
-        # AI Learning Context
-        st.markdown("### 🧠 Learning Context")
+        st.markdown('<div class="section-header">Learning Context</div>', unsafe_allow_html=True)
         context = db.get_context_for_ai(selected)
-        st.markdown(f"""
-        <div class="ai-thinking-box">
-            <pre style="color:#00ff88; font-family:monospace; white-space:pre-wrap; font-size:0.8rem;">{context}</pre>
-        </div>
-        """, unsafe_allow_html=True)
+        st.code(context, language=None)
 
-        # LLM Analysis (if available)
+        # LLM Analysis
         if ANTHROPIC_API_KEY or OPENAI_API_KEY:
-            st.markdown("### 🤖 LLM Deep Analysis")
+            st.markdown('<div class="section-header">AI Analysis</div>', unsafe_allow_html=True)
 
             llm = get_llm_analyzer()
 
-            if st.button("🧠 Get AI Analysis", type="primary"):
+            if st.button("Get AI Analysis", type="primary", key="llm_analyze"):
                 if llm:
-                    with st.spinner("🧠 AI is analyzing the market..."):
-                        tracker.log_thinking(selected, "Performing deep LLM analysis...")
-
+                    with st.spinner("Analyzing..."):
+                        tracker.log_thinking(selected, "Running LLM analysis...")
                         try:
-                            # Prepare data for LLM
                             technical_data = {
                                 "symbol": selected,
                                 "price": current_price,
@@ -767,14 +849,8 @@ def render_ai_analysis(symbols: list, db: TradingDatabase, tracker: AIActivityTr
                                 "trend": "bullish" if ema9 > ema21 else "bearish",
                                 "price_change_24h": ticker.get('percentage', 0) if ticker else 0
                             }
+                            signal_data = {"signal": signal, "confidence": confidence, "reasons": reasons}
 
-                            signal_data = {
-                                "signal": signal,
-                                "confidence": confidence,
-                                "reasons": reasons
-                            }
-
-                            # Call LLM
                             analysis = run_async(llm.analyze_market(
                                 symbol=selected,
                                 technical_data=technical_data,
@@ -783,70 +859,53 @@ def render_ai_analysis(symbols: list, db: TradingDatabase, tracker: AIActivityTr
                                 additional_context=context
                             ))
 
-                            # Store analysis in session
                             st.session_state.last_llm_analysis = analysis
-
-                            # Log the analysis
-                            tracker.log_activity(
-                                ActivityType.THINKING,
-                                selected,
-                                f"LLM Analysis: {analysis.sentiment.upper()}",
-                                analysis.summary,
-                                confidence=analysis.confidence
-                            )
-
+                            tracker.log_activity(ActivityType.THINKING, selected,
+                                                f"Analysis: {analysis.sentiment.upper()}", analysis.summary,
+                                                confidence=analysis.confidence)
                             st.rerun()
-
                         except Exception as e:
-                            st.error(f"LLM analysis failed: {str(e)}")
-                            tracker.log_error(selected, f"LLM error: {str(e)}")
+                            st.error(f"Analysis failed: {str(e)}")
                 else:
-                    st.warning("LLM not available. Check API keys in .env file.")
+                    st.warning("LLM not available")
 
-            # Display last analysis if exists
             if 'last_llm_analysis' in st.session_state:
                 analysis = st.session_state.last_llm_analysis
-
-                sent_color = "#00ff88" if analysis.sentiment == "bullish" else "#ff4444" if analysis.sentiment == "bearish" else "#ffff00"
-                action_color = "#00ff88" if analysis.recommended_action == "buy" else "#ff4444" if analysis.recommended_action == "sell" else "#ffff00"
+                sent_color = COLORS['success'] if analysis.sentiment == "bullish" else COLORS['danger'] if analysis.sentiment == "bearish" else COLORS['warning']
 
                 st.markdown(f"""
-                <div style="background:linear-gradient(135deg,#0d1f0d,#1a2d2a); border:1px solid {sent_color};
-                            border-radius:10px; padding:15px; margin-top:10px;">
-                    <h4 style="color:{sent_color}; margin:0;">
-                        {'📈' if analysis.sentiment == 'bullish' else '📉' if analysis.sentiment == 'bearish' else '➡️'}
+                <div class="card" style="border-left:3px solid {sent_color};">
+                    <div style="color:{sent_color}; font-weight:600; font-size:1.1rem;">
                         {analysis.sentiment.upper()} ({analysis.confidence:.0%})
-                    </h4>
-                    <p style="color:#ddd; margin:10px 0;">{analysis.summary}</p>
-                    <p style="color:{action_color}; font-weight:bold;">
+                    </div>
+                    <div style="color:{COLORS['text_secondary']}; margin-top:8px;">
+                        {analysis.summary}
+                    </div>
+                    <div style="color:{COLORS['text_primary']}; font-weight:500; margin-top:12px;">
                         Recommendation: {analysis.recommended_action.upper()}
-                    </p>
+                    </div>
                 </div>
                 """, unsafe_allow_html=True)
 
-                # Show details in expander
-                with st.expander("📊 Full Analysis Details"):
-                    st.markdown("**Key Factors:**")
+                with st.expander("Full Analysis"):
+                    st.write("**Key Factors:**")
                     for factor in analysis.key_factors:
-                        st.markdown(f"• {factor}")
-
-                    st.markdown("**Risks:**")
+                        st.write(f"- {factor}")
+                    st.write("**Risks:**")
                     for risk in analysis.risks:
-                        st.markdown(f"⚠️ {risk}")
-
-                    st.markdown("**Opportunities:**")
+                        st.write(f"- {risk}")
+                    st.write("**Opportunities:**")
                     for opp in analysis.opportunities:
-                        st.markdown(f"✨ {opp}")
-
-                    st.markdown("**Reasoning:**")
-                    st.markdown(f"_{analysis.reasoning}_")
+                        st.write(f"- {opp}")
+                    st.write("**Reasoning:**")
+                    st.write(analysis.reasoning)
         else:
-            st.info("💡 Add ANTHROPIC_API_KEY or OPENAI_API_KEY to .env for AI-powered analysis")
+            st.info("Add API keys to .env for AI analysis")
 
 
 def render_news_section():
     """Render news section."""
-    st.markdown("### 📰 Market News")
+    st.markdown('<div class="section-header">Market News</div>', unsafe_allow_html=True)
 
     try:
         aggregator = NewsAggregator()
@@ -854,68 +913,75 @@ def render_news_section():
 
         if articles:
             for article in articles[:5]:
-                color = "#00ff88" if article.sentiment == "positive" else "#ff4444" if article.sentiment == "negative" else "#888"
+                sentiment_class = "news-positive" if article.sentiment == "positive" else "news-negative" if article.sentiment == "negative" else "news-neutral"
                 st.markdown(f"""
-                <div style="background:linear-gradient(135deg,#1e1e2f,#2d2d44); border-left:4px solid {color};
-                            padding:15px; margin:10px 0; border-radius:0 10px 10px 0;">
-                    <b style="color:white;">{article.title}</b><br>
-                    <small style="color:#888;">📰 {article.source} | {article.published_at[:10] if article.published_at else ''}</small>
+                <div class="news-item {sentiment_class}">
+                    <div style="color:{COLORS['text_primary']}; font-weight:500;">{article.title}</div>
+                    <div style="color:{COLORS['text_muted']}; font-size:0.8rem; margin-top:4px;">
+                        {article.source} · {article.published_at[:10] if article.published_at else ''}
+                    </div>
                 </div>
                 """, unsafe_allow_html=True)
         else:
             st.info("No news available")
-    except:
-        st.info("News loading...")
+    except Exception:
+        st.info("Loading news...")
 
 
 def render_trade_history(db: TradingDatabase):
     """Render trade history."""
-    st.markdown("### 📜 Trade History")
+    st.markdown('<div class="section-header">Trade History</div>', unsafe_allow_html=True)
 
     trades = db.get_recent_trades(20)
     if not trades:
         st.info("No trade history yet")
         return
 
-    data = [{
-        "Time": t.entry_time[:19] if t.entry_time else "N/A",
-        "Symbol": t.symbol,
-        "Side": "🟢 BUY" if t.side == "BUY" else "🔴 SELL",
-        "Entry": f"${t.entry_price:,.2f}",
-        "Exit": f"${t.exit_price:,.2f}" if t.exit_price else "Open",
-        "P&L": f"${t.pnl:+,.2f}" if t.status == "closed" else "-"
-    } for t in trades]
+    data = []
+    for t in trades:
+        pnl_str = f"${t.pnl:+,.2f}" if t.status == "closed" and t.pnl else "-"
+        data.append({
+            "Time": t.entry_time[:16] if t.entry_time else "N/A",
+            "Symbol": t.symbol,
+            "Side": t.side,
+            "Entry": f"${t.entry_price:,.2f}",
+            "Exit": f"${t.exit_price:,.2f}" if t.exit_price else "-",
+            "P&L": pnl_str,
+            "Status": t.status.capitalize()
+        })
 
     st.dataframe(pd.DataFrame(data), use_container_width=True, hide_index=True)
 
 
 def render_learning_section(db: TradingDatabase):
     """Render learning section."""
-    st.markdown("### 🎓 AI Learning")
+    st.markdown('<div class="section-header">Performance Analytics</div>', unsafe_allow_html=True)
 
     col1, col2 = st.columns(2)
 
     with col1:
-        st.markdown("#### Performance by Symbol")
+        st.markdown("**Performance by Symbol**")
         perf = []
         for sym in ["BTC/USDT", "ETH/USDT", "SOL/USDT"]:
             p = db.get_symbol_performance(sym)
-            perf.append({"Symbol": sym, "Trades": p['total_trades'], "Win Rate": f"{p['win_rate']:.1f}%"})
+            perf.append({
+                "Symbol": sym,
+                "Trades": p['total_trades'],
+                "Win Rate": f"{p['win_rate']:.1f}%",
+                "P&L": f"${p.get('total_pnl', 0):,.2f}"
+            })
         st.dataframe(pd.DataFrame(perf), use_container_width=True, hide_index=True)
 
     with col2:
-        st.markdown("#### AI Insights")
+        st.markdown("**AI Insights**")
         insights = db.get_insights(5)
         if insights:
             for i in insights:
                 st.markdown(f"""
-                <div style="background:linear-gradient(135deg,#1a1a2e,#16213e); padding:10px;
-                            border-radius:10px; margin:5px 0; border-left:4px solid #00ff88;">
-                    💡 {i.description}
-                </div>
+                <div class="insight-card">{i.description}</div>
                 """, unsafe_allow_html=True)
         else:
-            st.info("No insights yet")
+            st.info("No insights yet. Trade more to generate insights.")
 
 
 # Helper functions
@@ -927,7 +993,13 @@ def generate_sample_ohlcv(n: int) -> pd.DataFrame:
     data = []
     for _ in range(n):
         c = price + np.random.randn() * 500
-        data.append({"open": price, "high": max(price, c) + 200, "low": min(price, c) - 200, "close": c, "volume": np.random.randint(1e8, 5e8)})
+        data.append({
+            "open": price,
+            "high": max(price, c) + 200,
+            "low": min(price, c) - 200,
+            "close": c,
+            "volume": np.random.randint(1e8, 5e8)
+        })
         price = c
     return pd.DataFrame(data, index=dates)
 
