@@ -14,25 +14,39 @@ from decimal import Decimal
 import json
 import os
 import sys
+from pathlib import Path
 
 # Add parent path for imports
-sys.path.insert(0, str(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
+
+# Load environment variables from .env file
+from dotenv import load_dotenv
+env_path = project_root / '.env'
+load_dotenv(env_path)
 
 from src.broker.binance_client import BinanceBroker
 
 
-# Binance Testnet Configuration
-BINANCE_API_KEY = "028sJM50z6LApmam3rRbV7xrdbVvcXsNV2PKBBGtyXbzIvfe7oXOUrk1TXXFy83f"
-BINANCE_SECRET_KEY = "3FWoIwQGXfOh23t1p5XIIYRIt6waPNZnUT4esZdBZBodk6vkRTD0RbX9RxkOmhWb"
+# Binance Configuration from .env file
+BINANCE_API_KEY = os.getenv('BINANCE_API_KEY', '')
+BINANCE_SECRET_KEY = os.getenv('BINANCE_SECRET_KEY', '')
+BINANCE_TESTNET = os.getenv('BINANCE_TESTNET', 'true').lower() == 'true'
 
 
 def get_broker():
     """Get or create Binance broker instance."""
     if 'broker' not in st.session_state:
+        # Check if API keys are configured
+        if not BINANCE_API_KEY or not BINANCE_SECRET_KEY:
+            st.session_state.broker_connected = False
+            st.session_state.broker_error = "API keys not found in .env file"
+            return None
+
         broker = BinanceBroker(
             api_key=BINANCE_API_KEY,
             secret_key=BINANCE_SECRET_KEY,
-            testnet=True
+            testnet=BINANCE_TESTNET
         )
         # Connect synchronously
         loop = asyncio.new_event_loop()
@@ -746,7 +760,7 @@ def generate_sample_ohlcv(n: int) -> pd.DataFrame:
     import numpy as np
 
     np.random.seed(int(datetime.now().timestamp()) % 100)
-    dates = pd.date_range(end=datetime.now(), periods=n, freq="1H")
+    dates = pd.date_range(end=datetime.now(), periods=n, freq="1h")
 
     base_price = 95000  # Current BTC approximate price
     price = base_price
