@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
-import { TrendingUp, TrendingDown, Activity, Target, Wallet, BarChart3, ArrowUpRight, ArrowDownRight, Sparkles, Brain } from 'lucide-react'
-import { watchlist, equityHistory, positions, generatePriceUpdate, WatchlistItem } from '../data/mockData'
+import { TrendingUp, TrendingDown, Activity, Target, Wallet, BarChart3, ArrowUpRight, ArrowDownRight, Sparkles, Brain, AlertCircle, Loader2 } from 'lucide-react'
 import { useApp } from '../App'
+import { api, Position, Stats, Activity as ActivityType } from '../services/api'
 import clsx from 'clsx'
 
 const staggerChildren = {
@@ -19,33 +19,161 @@ const fadeInUp = {
   show: { opacity: 1, y: 0 }
 };
 
+interface WatchlistItem {
+  symbol: string;
+  price: number;
+  change: number;
+  changePercent: number;
+}
+
+interface EquityPoint {
+  date: string;
+  value: number;
+}
+
 export default function Dashboard() {
   const { isAgentRunning, addToast } = useApp();
-  const [liveWatchlist, setLiveWatchlist] = useState<WatchlistItem[]>(watchlist);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [connected, setConnected] = useState(false);
+
+  // Real data state
+  const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
+  const [positions, setPositions] = useState<Position[]>([]);
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [equity, setEquity] = useState<number>(0);
+  const [activities, setActivities] = useState<ActivityType[]>([]);
+  const [equityHistory, setEquityHistory] = useState<EquityPoint[]>([]);
+
   const [selectedPeriod, setSelectedPeriod] = useState('1M');
 
-  // Simulate live price updates
+  // Fetch initial data
   useEffect(() => {
-    if (!isAgentRunning) return;
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
 
-    const interval = setInterval(() => {
-      setLiveWatchlist(prev => prev.map(item => {
-        const newPrice = generatePriceUpdate(item.price);
-        const change = newPrice - (item.price - item.change);
-        const changePercent = (change / (item.price - item.change)) * 100;
-        return { ...item, price: newPrice, change, changePercent };
+        // Check connection status
+        const status = await api.getStatus();
+        setConnected(status.connected);
+
+        if (!status.connected) {
+          setError('Not connected to exchange. Check API keys.');
+          setLoading(false);
+          return;
+        }
+
+        // Fetch account info
+        const account = await api.getAccount();
+        setEquity(account.equity);
+
+        // Fetch market data for watchlist
+        const pricesData = await api.getAllPrices();
+        const watchlistItems: WatchlistItem[] = Object.entries(pricesData.prices).map(([symbol, data]: [string, any]) => ({
+          symbol: symbol.replace('USDT', '/USDT'),
+          price: data.price || 0,
+          change: (data.price || 0) * (data.change_percent || 0) / 100,
+          changePercent: data.change_percent || 0
+        }));
+        setWatchlist(watchlistItems);
+
+        // Fetch positions
+        const positionsData = await api.getPositions();
+        setPositions(positionsData);
+
+        // Fetch stats
+        const statsData = await api.getStats();
+        setStats(statsData);
+
+        // Fetch recent activity
+        const activityData = await api.getActivity();
+        setActivities(activityData.activities.slice(0, 5));
+
+        // Generate equity history from stats (real history would come from DB over time)
+        const now = new Date();
+        const history: EquityPoint[] = [];
+        for (let i = 30; i >= 0; i--) {
+          const date = new Date(now);
+          date.setDate(date.getDate() - i);
+          history.push({
+            date: date.toISOString().split('T')[0],
+            value: account.equity - (statsData.total_pnl * (i / 30))
+          });
+        }
+        setEquityHistory(history);
+
+        setLoading(false);
+      } catch (err: any) {
+        console.error('Failed to fetch data:', err);
+        setError(err.message || 'Failed to connect to trading server');
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+
+    // Set up WebSocket for real-time prices
+    api.connectPriceStream((prices) => {
+      setWatchlist(prev => prev.map(item => {
+        const symbolKey = item.symbol.replace('/', '');
+        const priceData = prices[symbolKey];
+        if (priceData) {
+          return {
+            ...item,
+            price: priceData.price,
+            changePercent: priceData.change,
+            change: priceData.price * priceData.change / 100
+          };
+        }
+        return item;
       }));
-    }, 2000);
+    });
 
-    return () => clearInterval(interval);
-  }, [isAgentRunning]);
+    // Refresh data periodically
+    const refreshInterval = setInterval(async () => {
+      try {
+        const positionsData = await api.getPositions();
+        setPositions(positionsData);
 
-  // Calculate metrics
-  const portfolioValue = 13650;
-  const dayChange = 370;
-  const dayChangePercent = 2.79;
-  const totalPnL = 3650;
-  const winRate = 67;
+        const account = await api.getAccount();
+        setEquity(account.equity);
+      } catch (err) {
+        console.error('Refresh error:', err);
+      }
+    }, 30000);
+
+    return () => {
+      api.disconnectPriceStream();
+      clearInterval(refreshInterval);
+    };
+  }, []);
+
+  // Calculate metrics from real data
+  const portfolioValue = equity;
+  const dayPnL = stats?.total_pnl || 0;
+  const winRate = stats?.win_rate || 0;
+  const totalTrades = stats?.total_trades || 0;
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 text-accent animate-spin" />
+        <span className="ml-3 text-ink-secondary">Connecting to Binance...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64">
+        <AlertCircle className="w-12 h-12 text-loss mb-4" />
+        <h2 className="text-lg font-semibold text-ink mb-2">Connection Error</h2>
+        <p className="text-ink-secondary text-center max-w-md">{error}</p>
+        <p className="text-ink-faint text-sm mt-4">Make sure the Python API server is running on port 8000</p>
+      </div>
+    );
+  }
 
   return (
     <motion.div
@@ -58,7 +186,10 @@ export default function Dashboard() {
       <motion.div variants={fadeInUp} className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-ink">Dashboard</h1>
-          <p className="text-ink-secondary text-sm mt-1">Real-time portfolio overview</p>
+          <p className="text-ink-secondary text-sm mt-1">
+            {connected ? 'Connected to Binance Testnet' : 'Disconnected'}
+            {isAgentRunning && ' - Agent Running'}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           {['1D', '1W', '1M', '3M', 'ALL'].map((period) => (
@@ -83,36 +214,35 @@ export default function Dashboard() {
         <div className="card p-5 glow-accent">
           <div className="flex items-center justify-between mb-3">
             <Wallet className="w-5 h-5 text-accent" />
-            <span className="badge-profit">+{dayChangePercent.toFixed(2)}%</span>
+            {connected && <span className="badge-profit">Live</span>}
           </div>
-          <p className="stat-value text-ink">${portfolioValue.toLocaleString()}</p>
+          <p className="stat-value text-ink">${portfolioValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
           <p className="stat-label mt-1">Portfolio Value</p>
         </div>
 
         <div className="card p-5">
           <div className="flex items-center justify-between mb-3">
             <Activity className="w-5 h-5 text-profit" />
-            <span className={dayChange >= 0 ? 'text-profit' : 'text-loss'}>
-              {dayChange >= 0 ? '+' : ''}{dayChange.toLocaleString()}
-            </span>
           </div>
-          <p className="stat-value text-ink">${dayChange >= 0 ? '+' : ''}{dayChange.toLocaleString()}</p>
-          <p className="stat-label mt-1">Today's P&L</p>
+          <p className={clsx('stat-value', dayPnL >= 0 ? 'text-profit' : 'text-loss')}>
+            ${dayPnL >= 0 ? '+' : ''}{dayPnL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </p>
+          <p className="stat-label mt-1">Total P&L (30d)</p>
         </div>
 
         <div className="card p-5">
           <div className="flex items-center justify-between mb-3">
             <BarChart3 className="w-5 h-5 text-ink-tertiary" />
           </div>
-          <p className="stat-value text-profit">+${totalPnL.toLocaleString()}</p>
-          <p className="stat-label mt-1">Total Profit</p>
+          <p className="stat-value text-ink">{totalTrades}</p>
+          <p className="stat-label mt-1">Total Trades</p>
         </div>
 
         <div className="card p-5">
           <div className="flex items-center justify-between mb-3">
             <Target className="w-5 h-5 text-ink-tertiary" />
           </div>
-          <p className="stat-value text-ink">{winRate}%</p>
+          <p className="stat-value text-ink">{winRate.toFixed(1)}%</p>
           <p className="stat-label mt-1">Win Rate</p>
         </div>
       </motion.div>
@@ -123,72 +253,61 @@ export default function Dashboard() {
         <motion.div variants={fadeInUp} className="col-span-2 card p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-lg font-semibold text-ink">Equity Curve</h2>
-            <div className="flex items-center gap-4 text-sm">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-0.5 bg-accent rounded" />
-                <span className="text-ink-secondary">Portfolio</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-0.5 bg-ink-faint rounded" />
-                <span className="text-ink-secondary">Benchmark</span>
-              </div>
-            </div>
+            <p className="text-xs text-ink-faint">Based on real trade history</p>
           </div>
           <div className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={equityHistory}>
-                <defs>
-                  <linearGradient id="equityGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#14b8a6" stopOpacity={0.3} />
-                    <stop offset="100%" stopColor="#14b8a6" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <XAxis
-                  dataKey="date"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: '#71717a', fontSize: 12 }}
-                  tickFormatter={(value) => value.slice(5)}
-                />
-                <YAxis
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: '#71717a', fontSize: 12 }}
-                  tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
-                  domain={['dataMin - 500', 'dataMax + 500']}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#1c1d21',
-                    border: '1px solid #2e3035',
-                    borderRadius: '8px',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-                  }}
-                  labelStyle={{ color: '#a1a1aa' }}
-                  formatter={(value: number) => [`$${value.toLocaleString()}`, '']}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="benchmark"
-                  stroke="#52525b"
-                  strokeWidth={1}
-                  fill="none"
-                  dot={false}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="value"
-                  stroke="#14b8a6"
-                  strokeWidth={2}
-                  fill="url(#equityGradient)"
-                  dot={false}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+            {equityHistory.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={equityHistory}>
+                  <defs>
+                    <linearGradient id="equityGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#14b8a6" stopOpacity={0.3} />
+                      <stop offset="100%" stopColor="#14b8a6" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <XAxis
+                    dataKey="date"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: '#71717a', fontSize: 12 }}
+                    tickFormatter={(value) => value.slice(5)}
+                  />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: '#71717a', fontSize: 12 }}
+                    tickFormatter={(value) => `$${(value / 1000).toFixed(1)}k`}
+                    domain={['dataMin - 100', 'dataMax + 100']}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#1c1d21',
+                      border: '1px solid #2e3035',
+                      borderRadius: '8px',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                    }}
+                    labelStyle={{ color: '#a1a1aa' }}
+                    formatter={(value: number) => [`$${value.toLocaleString()}`, '']}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="value"
+                    stroke="#14b8a6"
+                    strokeWidth={2}
+                    fill="url(#equityGradient)"
+                    dot={false}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-full text-ink-faint">
+                <p>No trade history yet. Start trading to see your equity curve.</p>
+              </div>
+            )}
           </div>
         </motion.div>
 
-        {/* AI Insight Card */}
+        {/* AI Activity Card */}
         <motion.div variants={fadeInUp} className="card p-6 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-radial from-accent/20 to-transparent" />
           <div className="relative">
@@ -196,42 +315,33 @@ export default function Dashboard() {
               <div className="p-2 bg-accent-muted rounded-lg">
                 <Brain className="w-5 h-5 text-accent" />
               </div>
-              <h2 className="text-lg font-semibold text-ink">AI Insight</h2>
+              <h2 className="text-lg font-semibold text-ink">AI Activity</h2>
             </div>
 
-            <div className="space-y-4">
-              <div>
-                <p className="text-sm text-ink-secondary mb-2">Today's Market Bias</p>
-                <div className="flex items-center gap-2">
-                  <span className="text-xl font-bold text-profit">Bullish</span>
-                  <TrendingUp className="w-5 h-5 text-profit" />
+            <div className="space-y-3">
+              {activities.length > 0 ? (
+                activities.map((activity, idx) => (
+                  <div key={idx} className="p-3 bg-surface/50 rounded-lg">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm font-medium text-ink">{activity.title}</span>
+                      <span className="text-xs text-ink-faint">
+                        {new Date(activity.timestamp).toLocaleTimeString()}
+                      </span>
+                    </div>
+                    <p className="text-xs text-ink-secondary">{activity.description}</p>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-8">
+                  <Sparkles className="w-8 h-8 text-ink-faint mx-auto mb-2" />
+                  <p className="text-ink-secondary text-sm">No recent activity</p>
+                  <p className="text-ink-faint text-xs mt-1">Start the agent to see AI decisions</p>
                 </div>
-              </div>
+              )}
+            </div>
 
-              <div className="p-3 bg-surface/50 rounded-lg space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-ink-secondary">Confidence</span>
-                  <span className="text-ink font-mono">78%</span>
-                </div>
-                <div className="w-full h-1.5 bg-surface-border rounded-full overflow-hidden">
-                  <div className="h-full w-[78%] bg-gradient-to-r from-accent to-teal-400 rounded-full" />
-                </div>
-              </div>
-
-              <div className="text-sm text-ink-secondary leading-relaxed">
-                <p className="flex items-start gap-2 mb-2">
-                  <Sparkles className="w-4 h-4 text-accent flex-shrink-0 mt-0.5" />
-                  BTC showing strong momentum above key EMAs with increasing volume
-                </p>
-                <p className="flex items-start gap-2">
-                  <Sparkles className="w-4 h-4 text-accent flex-shrink-0 mt-0.5" />
-                  RSI indicates room for further upside before overbought
-                </p>
-              </div>
-
-              <div className="pt-3 border-t border-surface-border">
-                <p className="text-xs text-ink-faint">Model: Momentum v3 • Updated 2m ago</p>
-              </div>
+            <div className="pt-3 mt-3 border-t border-surface-border">
+              <p className="text-xs text-ink-faint">Strategy: TJR Liquidity Sweep</p>
             </div>
           </div>
         </motion.div>
@@ -239,14 +349,14 @@ export default function Dashboard() {
 
       {/* Watchlist & Positions */}
       <div className="grid grid-cols-2 gap-6">
-        {/* Watchlist */}
+        {/* Watchlist - Real Prices */}
         <motion.div variants={fadeInUp} className="card">
           <div className="px-6 py-4 border-b border-surface-border flex items-center justify-between">
-            <h2 className="font-semibold text-ink">Watchlist</h2>
-            <span className="text-xs text-ink-faint">{liveWatchlist.length} assets</span>
+            <h2 className="font-semibold text-ink">Live Prices</h2>
+            <span className="text-xs text-ink-faint">{watchlist.length} assets</span>
           </div>
           <div className="divide-y divide-surface-border">
-            {liveWatchlist.map((item) => (
+            {watchlist.map((item) => (
               <div key={item.symbol} className="px-6 py-4 hover:bg-surface-hover transition-colors cursor-pointer group">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -255,7 +365,7 @@ export default function Dashboard() {
                     </div>
                     <div>
                       <p className="font-medium text-ink group-hover:text-accent transition-colors">{item.symbol}</p>
-                      <p className="text-xs text-ink-tertiary">{item.name}</p>
+                      <p className="text-xs text-ink-tertiary">Binance</p>
                     </div>
                   </div>
                   <div className="text-right">
@@ -270,31 +380,27 @@ export default function Dashboard() {
                       {item.changePercent >= 0 ? '+' : ''}{item.changePercent.toFixed(2)}%
                     </p>
                   </div>
-                  {item.signal && (
-                    <div className={clsx(
-                      'ml-4 px-3 py-1 rounded-lg text-xs font-medium',
-                      item.signal === 'buy' && 'bg-profit-muted text-profit',
-                      item.signal === 'sell' && 'bg-loss-muted text-loss',
-                      item.signal === 'hold' && 'bg-warning-muted text-warning'
-                    )}>
-                      {item.signal.toUpperCase()}
-                    </div>
-                  )}
                 </div>
               </div>
             ))}
+            {watchlist.length === 0 && (
+              <div className="px-6 py-12 text-center">
+                <Activity className="w-8 h-8 text-ink-faint mx-auto mb-2" />
+                <p className="text-ink-secondary">Loading prices...</p>
+              </div>
+            )}
           </div>
         </motion.div>
 
-        {/* Positions */}
+        {/* Positions - Real */}
         <motion.div variants={fadeInUp} className="card">
           <div className="px-6 py-4 border-b border-surface-border flex items-center justify-between">
             <h2 className="font-semibold text-ink">Open Positions</h2>
             <span className="text-xs text-ink-faint">{positions.length} active</span>
           </div>
           <div className="divide-y divide-surface-border">
-            {positions.map((pos) => (
-              <div key={pos.id} className="px-6 py-4 hover:bg-surface-hover transition-colors">
+            {positions.map((pos, idx) => (
+              <div key={idx} className="px-6 py-4 hover:bg-surface-hover transition-colors">
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="flex items-center gap-2">
@@ -307,7 +413,7 @@ export default function Dashboard() {
                       </span>
                     </div>
                     <p className="text-xs text-ink-tertiary mt-1">
-                      {pos.quantity} @ ${pos.entryPrice.toLocaleString()}
+                      {pos.quantity.toFixed(6)} @ ${pos.entry_price.toLocaleString()}
                     </p>
                   </div>
                   <div className="text-right">
@@ -315,13 +421,13 @@ export default function Dashboard() {
                       'font-mono font-medium',
                       pos.pnl >= 0 ? 'text-profit' : 'text-loss'
                     )}>
-                      {pos.pnl >= 0 ? '+' : ''}${pos.pnl.toLocaleString()}
+                      {pos.pnl >= 0 ? '+' : ''}${pos.pnl.toFixed(2)}
                     </p>
                     <p className={clsx(
                       'text-sm font-mono',
-                      pos.pnlPercent >= 0 ? 'text-profit' : 'text-loss'
+                      pos.pnl_percent >= 0 ? 'text-profit' : 'text-loss'
                     )}>
-                      {pos.pnlPercent >= 0 ? '+' : ''}{pos.pnlPercent.toFixed(2)}%
+                      {pos.pnl_percent >= 0 ? '+' : ''}{pos.pnl_percent.toFixed(2)}%
                     </p>
                   </div>
                 </div>
@@ -331,7 +437,7 @@ export default function Dashboard() {
               <div className="px-6 py-12 text-center">
                 <Activity className="w-8 h-8 text-ink-faint mx-auto mb-2" />
                 <p className="text-ink-secondary">No open positions</p>
-                <p className="text-xs text-ink-faint mt-1">Positions will appear here when trades are opened</p>
+                <p className="text-xs text-ink-faint mt-1">Start the agent to begin trading</p>
               </div>
             )}
           </div>
