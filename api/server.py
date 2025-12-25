@@ -282,6 +282,9 @@ async def get_ohlcv(symbol: str, timeframe: str = "1h", limit: int = 100):
         raise HTTPException(status_code=503, detail="Broker not connected")
 
     try:
+        # Normalize symbol format: BTCUSDT -> BTC/USDT (CCXT format)
+        if '/' not in symbol and 'USDT' in symbol:
+            symbol = symbol.replace('USDT', '/USDT')
         ohlcv = await broker.get_ohlcv(symbol, timeframe, limit)
         if not ohlcv:
             return {"candles": [], "symbol": symbol, "timeframe": timeframe}
