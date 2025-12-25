@@ -218,33 +218,6 @@ async def get_account():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/market/{symbol}", response_model=MarketData)
-async def get_market_data(symbol: str):
-    """Get real-time market data for a symbol"""
-    if not broker:
-        raise HTTPException(status_code=503, detail="Broker not connected")
-
-    try:
-        ticker = await broker.get_ticker(symbol)
-        if not ticker:
-            raise HTTPException(status_code=404, detail=f"Symbol {symbol} not found")
-
-        return MarketData(
-            symbol=symbol,
-            price=ticker.get('last', 0),
-            change_24h=ticker.get('last', 0) - ticker.get('open', 0),
-            change_percent=ticker.get('percentage', 0),
-            high_24h=ticker.get('high', 0),
-            low_24h=ticker.get('low', 0),
-            volume_24h=ticker.get('quoteVolume', 0),
-            timestamp=datetime.now().isoformat()
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @app.get("/api/market/prices")
 async def get_all_prices():
     """Get prices for all tracked symbols"""
@@ -269,6 +242,35 @@ async def get_all_prices():
             pass
 
     return {"prices": prices, "timestamp": datetime.now().isoformat()}
+
+
+@app.get("/api/market/{symbol}", response_model=MarketData)
+async def get_market_data(symbol: str):
+    """Get real-time market data for a symbol"""
+    if not broker:
+        raise HTTPException(status_code=503, detail="Broker not connected")
+
+    try:
+        # Handle symbol format (BTCUSDT or BTC/USDT)
+        ticker_symbol = symbol.replace('/', '')
+        ticker = await broker.get_ticker(ticker_symbol)
+        if not ticker:
+            raise HTTPException(status_code=404, detail=f"Symbol {symbol} not found")
+
+        return MarketData(
+            symbol=symbol,
+            price=ticker.get('last', 0),
+            change_24h=ticker.get('last', 0) - ticker.get('open', 0),
+            change_percent=ticker.get('percentage', 0),
+            high_24h=ticker.get('high', 0),
+            low_24h=ticker.get('low', 0),
+            volume_24h=ticker.get('quoteVolume', 0),
+            timestamp=datetime.now().isoformat()
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/ohlcv/{symbol}")
