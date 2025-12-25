@@ -95,7 +95,7 @@ app = FastAPI(
 # CORS for frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -183,8 +183,8 @@ async def root():
 
 @app.get("/api/status", response_model=ConnectionStatus)
 async def get_status():
-    """Get connection status"""
-    if broker and await broker.connect():
+    """Get connection status - fast check without reconnecting"""
+    if broker and broker._connected:
         return ConnectionStatus(
             connected=True,
             exchange="Binance",
