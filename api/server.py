@@ -25,7 +25,7 @@ load_dotenv(project_root / '.env')
 from src.broker.binance_client import BinanceBroker
 from src.learning.database import TradingDatabase
 from src.strategies.liquidity_sweep import LiquiditySweepStrategy
-from src.ai.activity_tracker import AIActivityTracker, ActivityType
+from src.ai.activity_tracker import get_tracker, ActivityType
 
 # Configuration
 BINANCE_API_KEY = os.getenv('BINANCE_API_KEY', '')
@@ -36,18 +36,20 @@ BINANCE_TESTNET = os.getenv('BINANCE_TESTNET', 'true').lower() == 'true'
 broker: Optional[BinanceBroker] = None
 database: Optional[TradingDatabase] = None
 strategy: Optional[LiquiditySweepStrategy] = None
-tracker: Optional[AIActivityTracker] = None
 trading_task: Optional[asyncio.Task] = None
+
+# Use the SAME global tracker that the strategy uses
+tracker = get_tracker()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events"""
-    global broker, database, strategy, tracker
+    global broker, database, strategy
 
     # Initialize database
     database = TradingDatabase(str(project_root / 'data' / 'trading_history.db'))
-    tracker = AIActivityTracker()
+    # Note: tracker is already initialized globally using get_tracker()
 
     # Initialize broker
     if BINANCE_API_KEY and BINANCE_SECRET_KEY:
