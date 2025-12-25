@@ -1,34 +1,59 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts'
-import { Plus, Play, Pause, GitCompare, TrendingUp, TrendingDown, Activity, Calendar, Clock, ArrowRight } from 'lucide-react'
-import { backtestRuns } from '../data/mockData'
-import { useApp } from '../App'
+import { Brain, TrendingUp, Clock, Activity, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { api } from '../services/api'
 import clsx from 'clsx'
 
-// Mock backtest equity curve
-const backtestEquity = Array.from({ length: 60 }, (_, i) => ({
-  day: i + 1,
-  portfolio: 10000 + (Math.random() * 500 - 100) * i * 0.5 + i * 50,
-  benchmark: 10000 + i * 35,
-}));
-
-// Mock trade distribution
-const tradeDistribution = [
-  { range: '-10%+', count: 3, color: '#ef4444' },
-  { range: '-5 to -10%', count: 8, color: '#f87171' },
-  { range: '-1 to -5%', count: 15, color: '#fca5a5' },
-  { range: '0 to -1%', count: 12, color: '#71717a' },
-  { range: '0 to 1%', count: 18, color: '#86efac' },
-  { range: '1 to 5%', count: 35, color: '#4ade80' },
-  { range: '5 to 10%', count: 28, color: '#22c55e' },
-  { range: '10%+', count: 26, color: '#16a34a' },
-];
+interface StrategyStatus {
+  active: boolean;
+  symbols: string[];
+  risk_per_trade: number;
+  min_rr: number;
+  active_setups: Record<string, any>;
+  liquidity_zones: Record<string, number>;
+  order_blocks: Record<string, number>;
+}
 
 export default function Strategy() {
-  const { addToast } = useApp();
-  const [selectedRun, setSelectedRun] = useState(backtestRuns[0]);
-  const [showNewBacktest, setShowNewBacktest] = useState(false);
+  const [status, setStatus] = useState<StrategyStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchStatus = async () => {
+      try {
+        const data = await fetch('http://localhost:8000/api/strategy/status').then(r => r.json());
+        setStatus(data.status);
+        setLoading(false);
+      } catch (err: any) {
+        setError('Could not connect to trading server');
+        setLoading(false);
+      }
+    };
+
+    fetchStatus();
+    const interval = setInterval(fetchStatus, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Activity className="w-6 h-6 text-accent animate-spin" />
+        <span className="ml-3 text-ink-secondary">Loading strategy status...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64">
+        <AlertCircle className="w-10 h-10 text-loss mb-4" />
+        <p className="text-ink-secondary">{error}</p>
+        <p className="text-ink-faint text-sm mt-2">Make sure the API server is running on port 8000</p>
+      </div>
+    );
+  }
 
   return (
     <motion.div
@@ -37,271 +62,172 @@ export default function Strategy() {
       className="space-y-6"
     >
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-ink">Strategy Lab</h1>
-          <p className="text-ink-secondary text-sm mt-1">Backtest and analyze trading strategies</p>
+      <div>
+        <h1 className="text-2xl font-bold text-ink">Strategy Lab</h1>
+        <p className="text-ink-secondary text-sm mt-1">TJR Liquidity Sweep Strategy - Real-time status</p>
+      </div>
+
+      {/* Strategy Overview */}
+      <div className="grid grid-cols-4 gap-4">
+        <div className="card p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <Brain className="w-5 h-5 text-accent" />
+            <span className="text-sm text-ink-secondary">Strategy</span>
+          </div>
+          <p className="text-lg font-semibold text-ink">TJR Liquidity Sweep</p>
+          <p className="text-xs text-ink-faint mt-1">Smart Money Concepts</p>
         </div>
-        <div className="flex items-center gap-3">
-          <button className="btn-secondary">
-            <GitCompare className="w-4 h-4" />
-            Compare Runs
-          </button>
-          <button
-            onClick={() => setShowNewBacktest(true)}
-            className="btn-primary"
-          >
-            <Plus className="w-4 h-4" />
-            New Backtest
-          </button>
+
+        <div className="card p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <TrendingUp className="w-5 h-5 text-profit" />
+            <span className="text-sm text-ink-secondary">Risk/Trade</span>
+          </div>
+          <p className="text-lg font-semibold text-ink">{((status?.risk_per_trade || 0.07) * 100).toFixed(0)}%</p>
+          <p className="text-xs text-ink-faint mt-1">of account balance</p>
+        </div>
+
+        <div className="card p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <Activity className="w-5 h-5 text-warning" />
+            <span className="text-sm text-ink-secondary">Min R:R</span>
+          </div>
+          <p className="text-lg font-semibold text-ink">{status?.min_rr || 2}:1</p>
+          <p className="text-xs text-ink-faint mt-1">Risk to Reward</p>
+        </div>
+
+        <div className="card p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <Clock className="w-5 h-5 text-ink-tertiary" />
+            <span className="text-sm text-ink-secondary">Analysis</span>
+          </div>
+          <p className="text-lg font-semibold text-ink">Every 60s</p>
+          <p className="text-xs text-ink-faint mt-1">Continuous scanning</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-6">
-        {/* Backtest Runs List */}
-        <div className="card">
-          <div className="px-4 py-3 border-b border-surface-border">
-            <h3 className="font-medium text-ink text-sm">Backtest Runs</h3>
+      {/* Symbols Being Tracked */}
+      <div className="card p-6">
+        <h2 className="text-lg font-semibold text-ink mb-4">Tracked Symbols</h2>
+        <div className="grid grid-cols-3 gap-4">
+          {(status?.symbols || ['BTC/USDT', 'ETH/USDT', 'XRP/USDT']).map((symbol) => (
+            <div key={symbol} className="p-4 bg-surface rounded-lg">
+              <div className="flex items-center justify-between">
+                <span className="font-medium text-ink">{symbol}</span>
+                <CheckCircle2 className="w-4 h-4 text-profit" />
+              </div>
+              <div className="mt-3 space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-ink-secondary">Liquidity Zones</span>
+                  <span className="text-ink font-mono">{status?.liquidity_zones?.[symbol] || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-ink-secondary">Order Blocks</span>
+                  <span className="text-ink font-mono">{status?.order_blocks?.[symbol] || 0}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Active Setups */}
+      <div className="card p-6">
+        <h2 className="text-lg font-semibold text-ink mb-4">Active Trade Setups</h2>
+        {Object.keys(status?.active_setups || {}).length === 0 ? (
+          <div className="text-center py-8">
+            <Activity className="w-8 h-8 text-ink-faint mx-auto mb-3" />
+            <p className="text-ink-secondary">No active setups</p>
+            <p className="text-ink-faint text-sm mt-1">The strategy is scanning for valid entry conditions</p>
           </div>
-          <div className="divide-y divide-surface-border">
-            {backtestRuns.map((run) => (
-              <button
-                key={run.id}
-                onClick={() => setSelectedRun(run)}
-                className={clsx(
-                  'w-full px-4 py-4 text-left transition-colors',
-                  selectedRun.id === run.id ? 'bg-accent-muted' : 'hover:bg-surface-hover'
-                )}
-              >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="font-medium text-ink text-sm">{run.name}</p>
-                    <p className="text-xs text-ink-tertiary mt-1">{run.strategy}</p>
+        ) : (
+          <div className="space-y-3">
+            {Object.entries(status?.active_setups || {}).map(([symbol, setup]: [string, any]) => (
+              <div key={symbol} className="p-4 bg-surface rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className={clsx(
+                      'px-2 py-1 rounded text-xs font-medium',
+                      setup.signal === 'BUY' ? 'bg-profit-muted text-profit' : 'bg-loss-muted text-loss'
+                    )}>
+                      {setup.signal}
+                    </span>
+                    <span className="font-medium text-ink">{symbol}</span>
                   </div>
-                  {run.status === 'running' ? (
-                    <span className="badge-warning">
-                      <Activity className="w-3 h-3 animate-pulse" />
-                      Running
-                    </span>
-                  ) : run.status === 'completed' ? (
-                    <span className={run.returns >= 0 ? 'text-profit font-mono text-sm' : 'text-loss font-mono text-sm'}>
-                      {run.returns >= 0 ? '+' : ''}{run.returns}%
-                    </span>
-                  ) : (
-                    <span className="badge-loss">Failed</span>
-                  )}
+                  <span className="text-sm text-ink-secondary">R:R {setup.rr?.toFixed(1) || '-'}</span>
                 </div>
-                <div className="flex items-center gap-2 mt-2 text-xs text-ink-faint">
-                  <Calendar className="w-3 h-3" />
-                  {run.period}
+                <div className="mt-3 grid grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <span className="text-ink-faint">Entry</span>
+                    <p className="font-mono text-ink">${setup.entry?.toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <span className="text-ink-faint">Stop Loss</span>
+                    <p className="font-mono text-loss">${setup.stop_loss?.toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <span className="text-ink-faint">Take Profit</span>
+                    <p className="font-mono text-profit">${setup.take_profit?.toLocaleString()}</p>
+                  </div>
                 </div>
-              </button>
+              </div>
             ))}
           </div>
-        </div>
-
-        {/* Results Panel */}
-        <div className="col-span-3 space-y-6">
-          {selectedRun.status === 'completed' ? (
-            <>
-              {/* Metrics */}
-              <div className="grid grid-cols-5 gap-4">
-                <div className="card p-4">
-                  <p className="stat-label">Returns</p>
-                  <p className={clsx(
-                    'stat-value',
-                    selectedRun.returns >= 0 ? 'text-profit' : 'text-loss'
-                  )}>
-                    {selectedRun.returns >= 0 ? '+' : ''}{selectedRun.returns}%
-                  </p>
-                </div>
-                <div className="card p-4">
-                  <p className="stat-label">Sharpe Ratio</p>
-                  <p className="stat-value text-ink">{selectedRun.sharpe}</p>
-                </div>
-                <div className="card p-4">
-                  <p className="stat-label">Max Drawdown</p>
-                  <p className="stat-value text-loss">{selectedRun.maxDrawdown}%</p>
-                </div>
-                <div className="card p-4">
-                  <p className="stat-label">Win Rate</p>
-                  <p className="stat-value text-ink">{selectedRun.winRate}%</p>
-                </div>
-                <div className="card p-4">
-                  <p className="stat-label">Total Trades</p>
-                  <p className="stat-value text-ink">{selectedRun.trades}</p>
-                </div>
-              </div>
-
-              {/* Equity Curve */}
-              <div className="card p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="font-medium text-ink">Equity Curve</h3>
-                  <div className="flex items-center gap-4 text-sm">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-0.5 bg-accent rounded" />
-                      <span className="text-ink-secondary">Strategy</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-0.5 bg-ink-faint rounded" />
-                      <span className="text-ink-secondary">Buy & Hold</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="h-[300px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={backtestEquity}>
-                      <defs>
-                        <linearGradient id="stratGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#14b8a6" stopOpacity={0.3} />
-                          <stop offset="100%" stopColor="#14b8a6" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <XAxis
-                        dataKey="day"
-                        axisLine={false}
-                        tickLine={false}
-                        tick={{ fill: '#71717a', fontSize: 11 }}
-                        tickFormatter={(v) => `Day ${v}`}
-                      />
-                      <YAxis
-                        axisLine={false}
-                        tickLine={false}
-                        tick={{ fill: '#71717a', fontSize: 11 }}
-                        tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
-                        domain={['dataMin - 500', 'dataMax + 500']}
-                      />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: '#1c1d21',
-                          border: '1px solid #2e3035',
-                          borderRadius: '8px',
-                        }}
-                        formatter={(value: number) => [`$${value.toLocaleString()}`, '']}
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="benchmark"
-                        stroke="#52525b"
-                        strokeWidth={1}
-                        fill="none"
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="portfolio"
-                        stroke="#14b8a6"
-                        strokeWidth={2}
-                        fill="url(#stratGradient)"
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              {/* Trade Distribution */}
-              <div className="card p-6">
-                <h3 className="font-medium text-ink mb-6">Trade P&L Distribution</h3>
-                <div className="h-[200px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={tradeDistribution}>
-                      <XAxis
-                        dataKey="range"
-                        axisLine={false}
-                        tickLine={false}
-                        tick={{ fill: '#71717a', fontSize: 10 }}
-                      />
-                      <YAxis
-                        axisLine={false}
-                        tickLine={false}
-                        tick={{ fill: '#71717a', fontSize: 11 }}
-                      />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: '#1c1d21',
-                          border: '1px solid #2e3035',
-                          borderRadius: '8px',
-                        }}
-                        formatter={(value: number) => [`${value} trades`, '']}
-                      />
-                      <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                        {tradeDistribution.map((entry, idx) => (
-                          <Cell key={idx} fill={entry.color} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="card p-12 text-center">
-              <Activity className="w-12 h-12 text-warning mx-auto mb-4 animate-pulse" />
-              <h3 className="text-lg font-medium text-ink mb-2">Backtest Running</h3>
-              <p className="text-ink-secondary mb-6">Processing historical data...</p>
-              <div className="w-48 h-2 bg-surface-border rounded-full mx-auto overflow-hidden">
-                <div className="h-full w-[45%] bg-warning rounded-full animate-pulse" />
-              </div>
-              <p className="text-sm text-ink-faint mt-4">Estimated time remaining: 2m 34s</p>
-            </div>
-          )}
-        </div>
+        )}
       </div>
 
-      {/* New Backtest Modal */}
-      {showNewBacktest && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-6">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="card p-6 w-full max-w-lg"
-          >
-            <h2 className="text-lg font-semibold text-ink mb-6">New Backtest</h2>
-            <div className="space-y-4">
+      {/* Strategy Explanation */}
+      <div className="card p-6">
+        <h2 className="text-lg font-semibold text-ink mb-4">How TJR Strategy Works</h2>
+        <div className="grid grid-cols-2 gap-6">
+          <div className="space-y-4">
+            <div className="flex gap-3">
+              <div className="w-8 h-8 rounded-full bg-accent-muted flex items-center justify-center text-accent font-semibold text-sm">1</div>
               <div>
-                <label className="label">Strategy</label>
-                <select className="input">
-                  <option>Momentum v3</option>
-                  <option>MeanRevert v2</option>
-                  <option>Hybrid</option>
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="label">Start Date</label>
-                  <input type="date" className="input" defaultValue="2024-10-01" />
-                </div>
-                <div>
-                  <label className="label">End Date</label>
-                  <input type="date" className="input" defaultValue="2024-12-24" />
-                </div>
-              </div>
-              <div>
-                <label className="label">Initial Capital</label>
-                <input type="number" className="input" defaultValue="10000" />
-              </div>
-              <div>
-                <label className="label">Symbols</label>
-                <input type="text" className="input" defaultValue="BTC/USDT, ETH/USDT" />
+                <p className="font-medium text-ink">Multi-Timeframe Analysis</p>
+                <p className="text-sm text-ink-secondary">Analyzes 4H, 1H, 15m, and 5m charts for confluence</p>
               </div>
             </div>
-            <div className="flex gap-3 mt-6">
-              <button onClick={() => setShowNewBacktest(false)} className="btn-ghost flex-1">
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  setShowNewBacktest(false);
-                  addToast({ type: 'info', message: 'Backtest started...' });
-                }}
-                className="btn-primary flex-1"
-              >
-                <Play className="w-4 h-4" />
-                Run Backtest
-              </button>
+            <div className="flex gap-3">
+              <div className="w-8 h-8 rounded-full bg-accent-muted flex items-center justify-center text-accent font-semibold text-sm">2</div>
+              <div>
+                <p className="font-medium text-ink">Find Liquidity Zones</p>
+                <p className="text-sm text-ink-secondary">Identifies swing highs/lows where stop losses cluster</p>
+              </div>
             </div>
-          </motion.div>
+            <div className="flex gap-3">
+              <div className="w-8 h-8 rounded-full bg-accent-muted flex items-center justify-center text-accent font-semibold text-sm">3</div>
+              <div>
+                <p className="font-medium text-ink">Wait for Sweep</p>
+                <p className="text-sm text-ink-secondary">Price takes out liquidity then reverses - the sweep</p>
+              </div>
+            </div>
+          </div>
+          <div className="space-y-4">
+            <div className="flex gap-3">
+              <div className="w-8 h-8 rounded-full bg-accent-muted flex items-center justify-center text-accent font-semibold text-sm">4</div>
+              <div>
+                <p className="font-medium text-ink">Confirm Break of Structure</p>
+                <p className="text-sm text-ink-secondary">Validates reversal with structure break on lower timeframe</p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <div className="w-8 h-8 rounded-full bg-accent-muted flex items-center justify-center text-accent font-semibold text-sm">5</div>
+              <div>
+                <p className="font-medium text-ink">Enter at Order Block/FVG</p>
+                <p className="text-sm text-ink-secondary">Waits for retracement to premium entry zone</p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <div className="w-8 h-8 rounded-full bg-accent-muted flex items-center justify-center text-accent font-semibold text-sm">6</div>
+              <div>
+                <p className="font-medium text-ink">Execute with Risk Management</p>
+                <p className="text-sm text-ink-secondary">7% risk, SL below sweep, TP at opposite liquidity</p>
+              </div>
+            </div>
+          </div>
         </div>
-      )}
+      </div>
     </motion.div>
   );
 }

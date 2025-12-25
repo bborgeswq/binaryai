@@ -1,53 +1,99 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Brain, Cpu, Activity, TrendingUp, TrendingDown, Sparkles, ChevronDown, ChevronUp, Check } from 'lucide-react'
-import { models } from '../data/mockData'
-import { useApp } from '../App'
+import { Brain, Activity, TrendingUp, TrendingDown, AlertCircle, Zap, Eye, Clock } from 'lucide-react'
 import clsx from 'clsx'
 
-// Mock features for explainability
-const modelFeatures = {
-  'momentum-v3': [
-    { name: 'RSI (14)', importance: 0.28, value: 32.5, signal: 'bullish' },
-    { name: 'MACD Histogram', importance: 0.24, value: 145.2, signal: 'bullish' },
-    { name: 'EMA 9/21 Cross', importance: 0.18, value: 'Above', signal: 'bullish' },
-    { name: 'Volume Profile', importance: 0.15, value: '1.4x avg', signal: 'neutral' },
-    { name: 'Bollinger %B', importance: 0.10, value: 0.72, signal: 'neutral' },
-    { name: 'ATR (14)', importance: 0.05, value: 2450, signal: 'neutral' },
-  ],
-  'meanrevert-v2': [
-    { name: 'Z-Score', importance: 0.32, value: -1.8, signal: 'bullish' },
-    { name: 'Bollinger %B', importance: 0.25, value: 0.12, signal: 'bullish' },
-    { name: 'RSI (7)', importance: 0.20, value: 28.5, signal: 'bullish' },
-    { name: 'Volume Delta', importance: 0.13, value: -0.3, signal: 'bearish' },
-    { name: 'Price Distance', importance: 0.10, value: '-2.4%', signal: 'bullish' },
-  ],
-  'hybrid': [
-    { name: 'Momentum Score', importance: 0.35, value: 0.72, signal: 'bullish' },
-    { name: 'Reversion Score', importance: 0.30, value: 0.45, signal: 'neutral' },
-    { name: 'ML Confidence', importance: 0.20, value: 0.78, signal: 'bullish' },
-    { name: 'Regime Filter', importance: 0.15, value: 'Trending', signal: 'bullish' },
-  ],
-};
+interface AIState {
+  status: string;
+  thinking: string;
+  analyzing_symbol: string | null;
+  last_signal: {
+    symbol: string;
+    signal: string;
+    confidence: number;
+    price: number;
+  } | null;
+  confidence: number;
+}
 
-const confidenceHistory = [
-  { time: '12:00', confidence: 0.65 },
-  { time: '12:15', confidence: 0.72 },
-  { time: '12:30', confidence: 0.68 },
-  { time: '12:45', confidence: 0.78 },
-  { time: '13:00', confidence: 0.75 },
-  { time: '13:15', confidence: 0.82 },
-];
+interface Thought {
+  time: string;
+  symbol: string;
+  thought: string;
+  type: string;
+}
+
+interface StrategyStatus {
+  active: boolean;
+  symbols: string[];
+  risk_per_trade: number;
+  min_rr: number;
+  active_setups: Record<string, any>;
+  liquidity_zones: Record<string, number>;
+  order_blocks: Record<string, number>;
+}
 
 export default function Models() {
-  const { addToast } = useApp();
-  const [activeModel, setActiveModel] = useState('momentum-v3');
-  const [expandedModel, setExpandedModel] = useState<string | null>('momentum-v3');
+  const [aiState, setAiState] = useState<AIState | null>(null);
+  const [thoughts, setThoughts] = useState<Thought[]>([]);
+  const [strategy, setStrategy] = useState<StrategyStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleActivateModel = (id: string) => {
-    setActiveModel(id);
-    addToast({ type: 'success', message: `Switched to ${models.find(m => m.id === id)?.name}` });
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [aiResponse, strategyResponse] = await Promise.all([
+          fetch('http://localhost:8000/api/ai/state'),
+          fetch('http://localhost:8000/api/strategy/status')
+        ]);
+
+        const aiData = await aiResponse.json();
+        const strategyData = await strategyResponse.json();
+
+        setAiState(aiData.state);
+        setThoughts(aiData.thoughts || []);
+        setStrategy(strategyData.status);
+        setLoading(false);
+      } catch (err) {
+        setError('Could not connect to trading server');
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+    const interval = setInterval(fetchData, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const getTypeColor = (type: string) => {
+    switch (type) {
+      case 'thinking': return 'text-purple-400 bg-purple-500/10';
+      case 'analyzing': return 'text-blue-400 bg-blue-500/10';
+      case 'signal_generated': return 'text-accent bg-accent-muted';
+      case 'pattern_detected': return 'text-yellow-400 bg-yellow-500/10';
+      default: return 'text-ink-secondary bg-surface';
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Activity className="w-6 h-6 text-accent animate-spin" />
+        <span className="ml-3 text-ink-secondary">Loading AI status...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64">
+        <AlertCircle className="w-10 h-10 text-loss mb-4" />
+        <p className="text-ink-secondary">{error}</p>
+        <p className="text-ink-faint text-sm mt-2">Make sure the API server is running on port 8000</p>
+      </div>
+    );
+  }
 
   return (
     <motion.div
@@ -56,172 +102,234 @@ export default function Models() {
       className="space-y-6"
     >
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-ink">AI Models</h1>
-          <p className="text-ink-secondary text-sm mt-1">Manage and understand your trading models</p>
-        </div>
+      <div>
+        <h1 className="text-2xl font-bold text-ink">AI Strategy Engine</h1>
+        <p className="text-ink-secondary text-sm mt-1">TJR Liquidity Sweep - Real-time AI Analysis</p>
       </div>
 
       <div className="grid grid-cols-3 gap-6">
-        {/* Model Selector */}
+        {/* Strategy Info */}
         <div className="space-y-4">
-          <h3 className="text-sm font-medium text-ink-secondary uppercase tracking-wider">Available Models</h3>
-          {models.map((model) => (
-            <div key={model.id} className="card overflow-hidden">
-              <button
-                onClick={() => setExpandedModel(expandedModel === model.id ? null : model.id)}
-                className="w-full p-4 flex items-center justify-between text-left"
-              >
-                <div className="flex items-center gap-3">
-                  <div className={clsx(
-                    'p-2 rounded-lg',
-                    activeModel === model.id ? 'bg-accent-muted' : 'bg-surface'
-                  )}>
-                    <Brain className={clsx(
-                      'w-5 h-5',
-                      activeModel === model.id ? 'text-accent' : 'text-ink-tertiary'
-                    )} />
-                  </div>
-                  <div>
-                    <p className="font-medium text-ink">{model.name}</p>
-                    <p className="text-xs text-ink-tertiary mt-0.5">Accuracy: {model.accuracy}%</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {activeModel === model.id && (
-                    <span className="badge-accent">Active</span>
-                  )}
-                  {expandedModel === model.id ? (
-                    <ChevronUp className="w-4 h-4 text-ink-tertiary" />
-                  ) : (
-                    <ChevronDown className="w-4 h-4 text-ink-tertiary" />
-                  )}
-                </div>
-              </button>
-
-              {expandedModel === model.id && (
-                <div className="px-4 pb-4 pt-2 border-t border-surface-border">
-                  <p className="text-sm text-ink-secondary mb-4">{model.description}</p>
-                  {activeModel !== model.id && (
-                    <button
-                      onClick={() => handleActivateModel(model.id)}
-                      className="btn-primary w-full"
-                    >
-                      <Check className="w-4 h-4" />
-                      Activate Model
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-
-        {/* Explainability Panel */}
-        <div className="col-span-2 space-y-6">
-          {/* Current Signal */}
           <div className="card p-6">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-accent-muted rounded-lg">
-                  <Cpu className="w-5 h-5 text-accent" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-ink">
-                    {models.find(m => m.id === activeModel)?.name}
-                  </h3>
-                  <p className="text-xs text-ink-tertiary">Current signal for BTC/USDT</p>
-                </div>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-accent-muted rounded-lg">
+                <Brain className="w-5 h-5 text-accent" />
               </div>
-              <div className="text-right">
-                <div className="flex items-center gap-2">
-                  <span className="text-2xl font-bold text-profit">BUY</span>
-                  <TrendingUp className="w-6 h-6 text-profit" />
-                </div>
-                <p className="text-sm text-ink-secondary">78% confidence</p>
+              <div>
+                <h3 className="font-semibold text-ink">Active Strategy</h3>
+                <p className="text-xs text-ink-tertiary">Smart Money Concepts</p>
               </div>
             </div>
+            <p className="text-lg font-bold text-ink mb-2">TJR Liquidity Sweep</p>
+            <p className="text-sm text-ink-secondary">
+              Multi-timeframe analysis looking for liquidity sweeps, break of structure, and order block entries.
+            </p>
+          </div>
 
-            {/* Confidence Meter */}
-            <div className="mb-6">
-              <div className="flex items-center justify-between text-sm mb-2">
-                <span className="text-ink-secondary">Model Confidence</span>
-                <span className="font-mono text-ink">78%</span>
+          {/* Strategy Parameters */}
+          <div className="card p-6">
+            <h3 className="font-semibold text-ink mb-4">Strategy Parameters</h3>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-ink-secondary">Risk Per Trade</span>
+                <span className="font-mono text-ink">{((strategy?.risk_per_trade || 0.07) * 100).toFixed(0)}%</span>
               </div>
-              <div className="h-3 bg-surface-border rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-accent to-teal-400 rounded-full transition-all duration-500"
-                  style={{ width: '78%' }}
-                />
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-ink-secondary">Minimum R:R</span>
+                <span className="font-mono text-ink">{strategy?.min_rr || 2}:1</span>
               </div>
-              <div className="flex justify-between text-xs text-ink-faint mt-1">
-                <span>Low</span>
-                <span>Medium</span>
-                <span>High</span>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-ink-secondary">Timeframes</span>
+                <span className="font-mono text-ink">4H, 1H, 15m, 5m</span>
               </div>
-            </div>
-
-            {/* What Changed */}
-            <div className="p-4 bg-surface/50 rounded-lg">
-              <div className="flex items-start gap-2 mb-2">
-                <Sparkles className="w-4 h-4 text-accent flex-shrink-0 mt-0.5" />
-                <p className="text-sm text-ink">
-                  <span className="font-medium">Recent signal change:</span> RSI crossed below 30 (oversold) while MACD histogram turned positive, indicating potential reversal.
-                </p>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-ink-secondary">Analysis Interval</span>
+                <span className="font-mono text-ink">60 seconds</span>
               </div>
             </div>
           </div>
 
-          {/* Feature Importance */}
+          {/* Tracked Symbols */}
           <div className="card p-6">
-            <h3 className="font-semibold text-ink mb-6">Feature Importance & Values</h3>
-            <div className="space-y-4">
-              {(modelFeatures[activeModel as keyof typeof modelFeatures] || []).map((feature, idx) => (
-                <div key={idx} className="flex items-center gap-4">
-                  <div className="w-32 text-sm text-ink-secondary">{feature.name}</div>
-                  <div className="flex-1">
-                    <div className="h-2 bg-surface-border rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-accent rounded-full"
-                        style={{ width: `${feature.importance * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                  <div className="w-20 text-sm font-mono text-ink text-right">
-                    {typeof feature.value === 'number' ? feature.value.toFixed(1) : feature.value}
-                  </div>
-                  <div className={clsx(
-                    'w-16 text-xs font-medium text-right',
-                    feature.signal === 'bullish' && 'text-profit',
-                    feature.signal === 'bearish' && 'text-loss',
-                    feature.signal === 'neutral' && 'text-ink-tertiary'
-                  )}>
-                    {feature.signal}
+            <h3 className="font-semibold text-ink mb-4">Tracked Symbols</h3>
+            <div className="space-y-2">
+              {(strategy?.symbols || ['BTC/USDT', 'ETH/USDT', 'XRP/USDT']).map((symbol) => (
+                <div key={symbol} className="flex justify-between items-center p-2 bg-surface rounded-lg">
+                  <span className="font-medium text-ink">{symbol}</span>
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="text-ink-faint">LZ: {strategy?.liquidity_zones?.[symbol] || 0}</span>
+                    <span className="text-ink-faint">OB: {strategy?.order_blocks?.[symbol] || 0}</span>
                   </div>
                 </div>
               ))}
             </div>
           </div>
+        </div>
 
-          {/* Model Stats */}
-          <div className="grid grid-cols-4 gap-4">
-            <div className="card p-4">
-              <p className="stat-label">Signals Today</p>
-              <p className="stat-value text-ink">24</p>
+        {/* AI State Panel */}
+        <div className="col-span-2 space-y-6">
+          {/* Current AI Status */}
+          <div className="card p-6">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className={clsx(
+                  'p-2 rounded-lg',
+                  aiState?.status === 'analyzing' ? 'bg-accent-muted' : 'bg-surface'
+                )}>
+                  <Brain className={clsx(
+                    'w-5 h-5',
+                    aiState?.status === 'analyzing' ? 'text-accent animate-pulse' : 'text-ink-tertiary'
+                  )} />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-ink">AI Status</h3>
+                  <p className="text-xs text-ink-tertiary">
+                    {aiState?.status === 'analyzing'
+                      ? `Analyzing ${aiState.analyzing_symbol}...`
+                      : aiState?.status === 'idle'
+                        ? 'Waiting for next analysis cycle'
+                        : 'Monitoring markets'}
+                  </p>
+                </div>
+              </div>
+              {aiState?.last_signal && (
+                <div className="text-right">
+                  <div className="flex items-center gap-2">
+                    <span className={clsx(
+                      'text-xl font-bold',
+                      aiState.last_signal.signal === 'BUY' ? 'text-profit' :
+                      aiState.last_signal.signal === 'SELL' ? 'text-loss' : 'text-warning'
+                    )}>
+                      {aiState.last_signal.signal}
+                    </span>
+                    {aiState.last_signal.signal === 'BUY' ? (
+                      <TrendingUp className="w-5 h-5 text-profit" />
+                    ) : aiState.last_signal.signal === 'SELL' ? (
+                      <TrendingDown className="w-5 h-5 text-loss" />
+                    ) : null}
+                  </div>
+                  <p className="text-sm text-ink-secondary">
+                    {aiState.last_signal.symbol} @ ${aiState.last_signal.price?.toLocaleString()}
+                  </p>
+                  <p className="text-xs text-ink-faint">
+                    {(aiState.last_signal.confidence * 100).toFixed(0)}% confidence
+                  </p>
+                </div>
+              )}
             </div>
-            <div className="card p-4">
-              <p className="stat-label">Accuracy (7d)</p>
-              <p className="stat-value text-profit">68%</p>
+
+            {/* Current Thinking */}
+            {aiState?.thinking && (
+              <div className="p-4 bg-surface/50 rounded-lg mb-4">
+                <div className="flex items-start gap-2">
+                  <Brain className="w-4 h-4 text-accent mt-0.5 flex-shrink-0" />
+                  <p className="text-sm text-ink">{aiState.thinking}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Confidence Meter */}
+            {aiState?.confidence > 0 && (
+              <div>
+                <div className="flex items-center justify-between text-sm mb-2">
+                  <span className="text-ink-secondary">Analysis Confidence</span>
+                  <span className="font-mono text-ink">{(aiState.confidence * 100).toFixed(0)}%</span>
+                </div>
+                <div className="h-2 bg-surface-border rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-accent to-teal-400 rounded-full transition-all duration-500"
+                    style={{ width: `${aiState.confidence * 100}%` }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Active Setups */}
+          <div className="card p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Zap className="w-5 h-5 text-warning" />
+              <h3 className="font-semibold text-ink">Active Trade Setups</h3>
             </div>
-            <div className="card p-4">
-              <p className="stat-label">Avg Confidence</p>
-              <p className="stat-value text-ink">72%</p>
+            {Object.keys(strategy?.active_setups || {}).length === 0 ? (
+              <div className="text-center py-6">
+                <Eye className="w-8 h-8 text-ink-faint mx-auto mb-2" />
+                <p className="text-ink-secondary">No active setups detected</p>
+                <p className="text-xs text-ink-faint mt-1">AI is scanning for valid entry conditions</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {Object.entries(strategy?.active_setups || {}).map(([symbol, setup]: [string, any]) => (
+                  <div key={symbol} className="p-4 bg-surface rounded-lg">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className={clsx(
+                          'px-2 py-1 rounded text-xs font-medium',
+                          setup.signal === 'BUY' ? 'bg-profit-muted text-profit' : 'bg-loss-muted text-loss'
+                        )}>
+                          {setup.signal}
+                        </span>
+                        <span className="font-medium text-ink">{symbol}</span>
+                      </div>
+                      <span className="text-sm text-ink-secondary">R:R {setup.rr?.toFixed(1) || '-'}</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-4 text-sm">
+                      <div>
+                        <span className="text-ink-faint">Entry</span>
+                        <p className="font-mono text-ink">${setup.entry?.toLocaleString()}</p>
+                      </div>
+                      <div>
+                        <span className="text-ink-faint">Stop Loss</span>
+                        <p className="font-mono text-loss">${setup.stop_loss?.toLocaleString()}</p>
+                      </div>
+                      <div>
+                        <span className="text-ink-faint">Take Profit</span>
+                        <p className="font-mono text-profit">${setup.take_profit?.toLocaleString()}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Recent AI Thoughts */}
+          <div className="card p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Clock className="w-5 h-5 text-ink-tertiary" />
+              <h3 className="font-semibold text-ink">Recent AI Analysis</h3>
             </div>
-            <div className="card p-4">
-              <p className="stat-label">Last Update</p>
-              <p className="stat-value text-ink text-lg">2m ago</p>
-            </div>
+            {thoughts.length === 0 ? (
+              <div className="text-center py-6">
+                <Brain className="w-8 h-8 text-ink-faint mx-auto mb-2" />
+                <p className="text-ink-secondary">No analysis history yet</p>
+                <p className="text-xs text-ink-faint mt-1">Start the trading agent to see AI thoughts</p>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                {thoughts.slice(0, 15).map((thought, idx) => (
+                  <div key={idx} className="p-3 bg-surface rounded-lg">
+                    <div className="flex items-start gap-2">
+                      <span className={clsx(
+                        'px-2 py-0.5 rounded text-xs',
+                        getTypeColor(thought.type)
+                      )}>
+                        {thought.type}
+                      </span>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-xs font-mono text-ink-faint">{thought.time}</span>
+                          {thought.symbol !== 'SYSTEM' && (
+                            <span className="text-xs font-medium text-ink-secondary">{thought.symbol}</span>
+                          )}
+                        </div>
+                        <p className="text-sm text-ink">{thought.thought}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
