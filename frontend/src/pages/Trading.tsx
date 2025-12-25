@@ -229,9 +229,9 @@ export default function Trading() {
             </div>
           </div>
 
-          {/* Candlestick Chart */}
+          {/* Candlestick Chart - Real-time 1m candles */}
           <div className="card p-4">
-            <CandlestickChart symbol={selectedSymbol} timeframe="1h" height={380} />
+            <CandlestickChart symbol={selectedSymbol} timeframe="1m" height={380} />
           </div>
 
           {/* Positions & Trades */}

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { createChart, IChartApi, ISeriesApi, CandlestickData, Time } from 'lightweight-charts';
 import { api } from '../services/api';
-import { AlertCircle, RefreshCw } from 'lucide-react';
+import { AlertCircle, RefreshCw, Radio } from 'lucide-react';
 
 interface CandlestickChartProps {
   symbol: string;
@@ -9,13 +9,15 @@ interface CandlestickChartProps {
   height?: number;
 }
 
-export default function CandlestickChart({ symbol, timeframe = '1h', height = 400 }: CandlestickChartProps) {
+export default function CandlestickChart({ symbol, timeframe = '1m', height = 400 }: CandlestickChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candlestickSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hasData, setHasData] = useState(false);
+  const [isLive, setIsLive] = useState(false);
 
   // Initialize chart
   useEffect(() => {
@@ -143,18 +145,77 @@ export default function CandlestickChart({ symbol, timeframe = '1h', height = 40
     }
   }, [symbol, timeframe, hasData]);
 
+  // Connect to real-time kline WebSocket
+  const connectWebSocket = useCallback(() => {
+    if (wsRef.current) {
+      wsRef.current.close();
+    }
+
+    const apiSymbol = symbol.replace('/', '');
+    const ws = new WebSocket(`ws://localhost:8000/ws/klines/${apiSymbol}?timeframe=${timeframe}`);
+
+    ws.onopen = () => {
+      console.log('Kline WebSocket connected');
+      setIsLive(true);
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'kline' && candlestickSeriesRef.current) {
+          const candle = data.candle;
+          const candleData: CandlestickData<Time> = {
+            time: (candle.timestamp / 1000) as Time,
+            open: candle.open,
+            high: candle.high,
+            low: candle.low,
+            close: candle.close,
+          };
+          // Update the last candle in real-time
+          candlestickSeriesRef.current.update(candleData);
+        }
+      } catch (e) {
+        console.error('WebSocket parse error:', e);
+      }
+    };
+
+    ws.onclose = () => {
+      console.log('Kline WebSocket disconnected');
+      setIsLive(false);
+      // Reconnect after 3 seconds
+      setTimeout(() => {
+        if (hasData) {
+          connectWebSocket();
+        }
+      }, 3000);
+    };
+
+    ws.onerror = (error) => {
+      console.error('Kline WebSocket error:', error);
+      setIsLive(false);
+    };
+
+    wsRef.current = ws;
+  }, [symbol, timeframe, hasData]);
+
   // Fetch data on mount and symbol change
   useEffect(() => {
     fetchCandles();
-
-    // Refresh candles every 60 seconds (less aggressive)
-    const interval = setInterval(fetchCandles, 60000);
-
-    return () => clearInterval(interval);
   }, [fetchCandles]);
 
-  // Don't use real-time WebSocket updates for the chart - it causes issues
-  // The chart will refresh every 60 seconds instead
+  // Connect WebSocket after initial data loads
+  useEffect(() => {
+    if (hasData) {
+      connectWebSocket();
+    }
+
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+    };
+  }, [hasData, connectWebSocket]);
 
   const handleRetry = () => {
     setError(null);
@@ -163,6 +224,13 @@ export default function CandlestickChart({ symbol, timeframe = '1h', height = 40
 
   return (
     <div className="relative w-full" style={{ minHeight: height }}>
+      {/* Live indicator */}
+      {isLive && (
+        <div className="absolute top-2 right-2 z-20 flex items-center gap-1.5 px-2 py-1 bg-profit/20 rounded text-xs text-profit font-medium">
+          <Radio className="w-3 h-3 animate-pulse" />
+          LIVE
+        </div>
+      )}
       {loading && !hasData && (
         <div className="absolute inset-0 flex items-center justify-center bg-canvas/80 z-10">
           <div className="flex items-center gap-2 text-ink-secondary">

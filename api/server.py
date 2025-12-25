@@ -641,6 +641,70 @@ async def websocket_prices(websocket: WebSocket):
         manager.disconnect(websocket)
 
 
+@app.websocket("/ws/klines/{symbol}")
+async def websocket_klines(websocket: WebSocket, symbol: str, timeframe: str = "1m"):
+    """WebSocket for real-time candlestick (kline) updates from Binance"""
+    import aiohttp
+
+    await websocket.accept()
+
+    # Binance WebSocket stream URL (testnet)
+    # Format: wss://testnet.binance.vision/ws/btcusdt@kline_1m
+    binance_symbol = symbol.lower()
+    ws_url = f"wss://testnet.binance.vision/ws/{binance_symbol}@kline_{timeframe}"
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.ws_connect(ws_url) as binance_ws:
+                async def forward_to_client():
+                    """Forward Binance kline data to our client"""
+                    async for msg in binance_ws:
+                        if msg.type == aiohttp.WSMsgType.TEXT:
+                            data = msg.json()
+                            if data.get('e') == 'kline':
+                                k = data['k']
+                                candle = {
+                                    "type": "kline",
+                                    "symbol": symbol.upper(),
+                                    "timeframe": timeframe,
+                                    "candle": {
+                                        "timestamp": k['t'],  # Kline start time
+                                        "open": float(k['o']),
+                                        "high": float(k['h']),
+                                        "low": float(k['l']),
+                                        "close": float(k['c']),
+                                        "volume": float(k['v']),
+                                        "closed": k['x']  # Is this kline closed?
+                                    }
+                                }
+                                await websocket.send_json(candle)
+                        elif msg.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.ERROR):
+                            break
+
+                async def check_client_disconnect():
+                    """Check if client disconnected"""
+                    try:
+                        while True:
+                            await websocket.receive_text()
+                    except WebSocketDisconnect:
+                        await binance_ws.close()
+
+                # Run both tasks
+                await asyncio.gather(
+                    forward_to_client(),
+                    check_client_disconnect(),
+                    return_exceptions=True
+                )
+
+    except Exception as e:
+        print(f"Kline WebSocket error: {e}")
+    finally:
+        try:
+            await websocket.close()
+        except:
+            pass
+
+
 if __name__ == "__main__":
     uvicorn.run(
         "server:app",
