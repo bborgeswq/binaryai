@@ -102,20 +102,24 @@ class BinanceBroker(BaseBroker):
         try:
             balance = self.exchange.fetch_balance()
 
-            # Calculate total equity in USDT
+            # Only count USDT and our trading currencies (BTC, ETH, XRP)
+            tracked_currencies = ['BTC', 'ETH', 'XRP']
+
             total_usdt = Decimal("0")
-            for currency, amounts in balance.get('total', {}).items():
+            usdt_balance = balance.get('total', {}).get('USDT', 0)
+            if usdt_balance:
+                total_usdt = Decimal(str(usdt_balance))
+
+            # Add value of tracked currencies only
+            for currency in tracked_currencies:
+                amounts = balance.get('total', {}).get(currency, 0)
                 if amounts and amounts > 0:
-                    if currency == 'USDT':
-                        total_usdt += Decimal(str(amounts))
-                    else:
-                        # Convert to USDT
-                        try:
-                            ticker = self.exchange.fetch_ticker(f"{currency}/USDT")
-                            price = Decimal(str(ticker['last']))
-                            total_usdt += Decimal(str(amounts)) * price
-                        except:
-                            pass
+                    try:
+                        ticker = self.exchange.fetch_ticker(f"{currency}/USDT")
+                        price = Decimal(str(ticker['last']))
+                        total_usdt += Decimal(str(amounts)) * price
+                    except:
+                        pass
 
             usdt_free = Decimal(str(balance.get('USDT', {}).get('free', 0)))
 
@@ -138,16 +142,24 @@ class BinanceBroker(BaseBroker):
             logger.error(f"Failed to get account: {e}")
             raise
 
-    async def get_positions(self) -> List[Position]:
-        """Get all open positions (non-zero balances)."""
+    async def get_positions(self, tracked_symbols: List[str] = None) -> List[Position]:
+        """Get positions for tracked symbols only (not all currencies)."""
         self._ensure_connected()
+
+        # Only check our trading symbols - not every random testnet currency
+        if tracked_symbols is None:
+            tracked_symbols = ['BTC/USDT', 'ETH/USDT', 'XRP/USDT']
+
+        # Extract base currencies from symbols (BTC, ETH, XRP)
+        tracked_currencies = [s.split('/')[0] for s in tracked_symbols]
 
         positions = []
         try:
             balance = self.exchange.fetch_balance()
 
-            for currency, amounts in balance.get('total', {}).items():
-                if currency == 'USDT' or not amounts or amounts <= 0.00001:
+            for currency in tracked_currencies:
+                amounts = balance.get('total', {}).get(currency, 0)
+                if not amounts or amounts <= 0.00001:
                     continue
 
                 try:
@@ -157,15 +169,14 @@ class BinanceBroker(BaseBroker):
                     quantity = Decimal(str(amounts))
                     market_value = quantity * current_price
 
-                    # We don't have entry price from Binance API, estimate from avg
                     positions.append(Position(
                         symbol=symbol,
                         quantity=quantity,
                         side=PositionSide.LONG,
-                        entry_price=current_price,  # Approximation
+                        entry_price=current_price,
                         current_price=current_price,
                         market_value=market_value,
-                        unrealized_pnl=Decimal("0"),  # Can't calculate without entry
+                        unrealized_pnl=Decimal("0"),
                         unrealized_pnl_pct=0.0,
                         cost_basis=market_value,
                         created_at=datetime.now()
