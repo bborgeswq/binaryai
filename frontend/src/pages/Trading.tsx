@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
-import { AlertOctagon, TrendingUp, TrendingDown, Activity, Clock, Zap, Loader2, Play, Square } from 'lucide-react'
+import { AlertOctagon, Activity, Clock, Zap, Loader2, Play, Square } from 'lucide-react'
 import { useApp } from '../App'
 import { api } from '../services/api'
 import AIThoughts from '../components/AIThoughts'
+import CandlestickChart from '../components/CandlestickChart'
 import clsx from 'clsx'
 
 interface Position {
@@ -36,7 +36,6 @@ export default function Trading() {
   const [priceChange, setPriceChange] = useState(0);
   const [positions, setPositions] = useState<Position[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
-  const [candleData, setCandleData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [agentLoading, setAgentLoading] = useState(false);
 
@@ -56,19 +55,6 @@ export default function Trading() {
         // Get trades
         const tradesData = await api.getTrades(10);
         setTrades(tradesData);
-
-        // Get candle data
-        try {
-          const ohlcv = await api.getOHLCV(selectedSymbol.replace('/', ''), '1h', 50);
-          setCandleData(ohlcv.candles.map((c: any) => ({
-            time: c.timestamp,
-            close: c.close,
-            high: c.high,
-            low: c.low
-          })));
-        } catch (e) {
-          console.error('Failed to fetch candles:', e);
-        }
 
         // Get agent status
         const agentStatus = await api.getAgentStatus();
@@ -243,58 +229,9 @@ export default function Trading() {
             </div>
           </div>
 
-          {/* Chart */}
-          <div className="card p-6">
-            <div className="h-[350px]">
-              {candleData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={candleData}>
-                    <defs>
-                      <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#14b8a6" stopOpacity={0.2} />
-                        <stop offset="100%" stopColor="#14b8a6" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <XAxis
-                      dataKey="time"
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fill: '#71717a', fontSize: 11 }}
-                      tickFormatter={(v) => new Date(v).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      minTickGap={50}
-                    />
-                    <YAxis
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fill: '#71717a', fontSize: 11 }}
-                      domain={['dataMin - 100', 'dataMax + 100']}
-                      tickFormatter={(v) => `$${v.toLocaleString()}`}
-                      orientation="right"
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: '#1c1d21',
-                        border: '1px solid #2e3035',
-                        borderRadius: '8px',
-                      }}
-                      labelFormatter={(v) => new Date(v).toLocaleString()}
-                      formatter={(value: number) => [`$${value.toLocaleString()}`, 'Price']}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="close"
-                      stroke="#14b8a6"
-                      strokeWidth={2}
-                      fill="url(#priceGradient)"
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="flex items-center justify-center h-full text-ink-faint">
-                  <p>Loading chart data...</p>
-                </div>
-              )}
-            </div>
+          {/* Candlestick Chart */}
+          <div className="card p-4">
+            <CandlestickChart symbol={selectedSymbol} timeframe="1h" height={380} />
           </div>
 
           {/* Positions & Trades */}
