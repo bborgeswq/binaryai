@@ -483,10 +483,39 @@ async def get_activity():
                 "symbol": a.symbol,
                 "title": a.title,
                 "description": a.description,
-                "timestamp": a.timestamp.isoformat()
+                "timestamp": a.timestamp.isoformat(),
+                "confidence": a.confidence,
+                "is_important": a.is_important
             }
             for a in activities
         ]
+    }
+
+
+@app.get("/api/ai/state")
+async def get_ai_state():
+    """Get current AI thinking state for real-time display"""
+    if not tracker:
+        return {"state": {}, "thoughts": []}
+
+    state = tracker.get_current_state()
+
+    # Get thinking activities (last 10)
+    thoughts = [
+        {
+            "time": a.timestamp.strftime("%H:%M:%S"),
+            "symbol": a.symbol,
+            "thought": a.description,
+            "type": a.activity_type.value
+        }
+        for a in tracker.get_recent_activities(10)
+        if a.activity_type.value in ["thinking", "analyzing", "signal_generated", "pattern_detected"]
+    ]
+
+    return {
+        "state": state,
+        "thoughts": thoughts,
+        "timestamp": datetime.now().isoformat()
     }
 
 
